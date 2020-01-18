@@ -1742,6 +1742,11 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				WorkerSession *session =
 					FindOrCreateWorkerSession(workerPool, connection);
 
+				if (PQstatus(connection->pgConn) == CONNECTION_BAD)
+				{
+					ConnectionStateMachine(session);
+				}
+
 				ereport(DEBUG4, (errmsg("Session %ld (%s:%d) has an assigned task",
 										session->sessionId, connection->hostname,
 										connection->port)));
