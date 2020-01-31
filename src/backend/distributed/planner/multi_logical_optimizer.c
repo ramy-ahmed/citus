@@ -36,6 +36,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -1578,7 +1579,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	const AttrNumber argumentId = 1; /* our aggregates have single arguments */
 	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	Expr *newMasterExpression = NULL;
-	AggClauseCosts aggregateCosts;
 
 	if (walkerContext->extendedOpNodeProperties->pullUpIntermediateRows)
 	{
@@ -2005,6 +2005,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			elog(ERROR, "Aggregate lacks COMBINEFUNC");
 		}
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM_NO_PUSHDOWN)
+	{
+		return (Expr *) originalAggregate;
+	}
 	else
 	{
 		/*
@@ -2061,12 +2065,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	{
 		newMasterExpression = typeConvertedExpression;
 	}
-
-	/* Run AggRefs through cost machinery to mark required fields sanely */
-	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
-
-	get_agg_clause_costs(NULL, (Node *) newMasterExpression, AGGSPLIT_SIMPLE,
-						 &aggregateCosts);
 
 	return newMasterExpression;
 }
@@ -2943,7 +2941,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	}
 
 	AggregateType aggregateType = GetAggregateType(originalAggregate);
-	AggClauseCosts aggregateCosts;
 
 	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
@@ -3112,6 +3109,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			elog(ERROR, "Aggregate lacks COMBINEFUNC");
 		}
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM_NO_PUSHDOWN)
+	{
+		return NIL;
+	}
 	else
 	{
 		/*
@@ -3120,13 +3121,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Aggref *workerAggregate = copyObject(originalAggregate);
 		workerAggregateList = lappend(workerAggregateList, workerAggregate);
 	}
-
-
-	/* Run AggRefs through cost machinery to mark required fields sanely */
-	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
-
-	get_agg_clause_costs(NULL, (Node *) workerAggregateList, AGGSPLIT_SIMPLE,
-						 &aggregateCosts);
 
 	return workerAggregateList;
 }
@@ -3140,6 +3134,56 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 static AggregateType
 GetAggregateType(Aggref *aggregateExpression)
 {
+	/*
+	 * if all arguments are sublinks then no push down is required,
+	 * as these are intermediate results. If only some arguments are
+	 * sublinks we'll want to use row-gather because it can handle
+	 * not pushing down those arguments.
+	 */
+	bool hasNonSublinkArgument = false;
+	bool hasSublinkArgument = false;
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, aggregateExpression->args)
+	{
+		if (FindNodeCheck((Node *) targetEntry->expr, IsNodeSubquery))
+		{
+			hasSublinkArgument = true;
+		}
+		else
+		{
+			hasNonSublinkArgument = true;
+		}
+	}
+	Expr *directarg = NULL;
+	foreach_ptr(directarg, aggregateExpression->aggdirectargs)
+	{
+		if (FindNodeCheck((Node *) directarg, IsNodeSubquery))
+		{
+			hasSublinkArgument = true;
+		}
+		else
+		{
+			hasNonSublinkArgument = true;
+		}
+	}
+	if (aggregateExpression->aggfilter != NULL)
+	{
+		if (FindNodeCheck((Node *) aggregateExpression->aggfilter, IsNodeSubquery))
+		{
+			hasSublinkArgument = true;
+		}
+		else
+		{
+			hasNonSublinkArgument = true;
+		}
+	}
+
+	if (hasSublinkArgument)
+	{
+		return hasNonSublinkArgument ? AGGREGATE_CUSTOM_ROW_GATHER :
+			   AGGREGATE_CUSTOM_NO_PUSHDOWN;
+	}
+
 	Oid aggFunctionId = aggregateExpression->aggfnoid;
 
 	/* look up the function name */
@@ -3692,7 +3736,8 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	AggregateType aggregateType = GetAggregateType(aggregateExpression);
 
 	/* If we're aggregating on coordinator, this becomes simple. */
-	if (aggregateType == AGGREGATE_CUSTOM_ROW_GATHER)
+	if (aggregateType == AGGREGATE_CUSTOM_ROW_GATHER ||
+		aggregateType == AGGREGATE_CUSTOM_NO_PUSHDOWN)
 	{
 		return NULL;
 	}
