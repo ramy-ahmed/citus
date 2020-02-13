@@ -238,16 +238,70 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
 (2 rows)
 
 -- table belongs to a role
--- we don't support propagation of configuration_parameters and notice the users
+-- alter configuration_parameter defaults for a user
 ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
-NOTICE:  Citus partially supports ALTER ROLE for distributed databases
-DETAIL:  Citus does not propagate ALTER ROLE ... SET/RESET commands to workers
-HINT:  You can manually alter roles on workers.
+ALTER ROLE alter_role_1 IN DATABASE template1 SET enable_hashjoin TO FALSE;
+-- give login permissions so that we can connect and check if the previous queries were propagated
+ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
+\c
+\c - alter_role_1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ on
+(1 row)
+
+\c template1 alter_role_1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ off
+(1 row)
+
+\c regression postgres
+ALTER ROLE alter_role_1 RESET ALL;
+ALTER ROLE alter_role_1 IN DATABASE template1 RESET ALL;
+\c - alter_role_1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ on
+(1 row)
+
+\c template1 alter_role_1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ on
+(1 row)
+
+\c regression postgres
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
 NOTICE:  MD5 password cleared because of role rename
-NOTICE:  Citus partially supports ALTER ROLE for distributed databases
-DETAIL:  Citus does not propagate ALTER ROLE ... RENAME TO commands to workers
-HINT:  You can manually alter roles on workers.
 SET citus.enable_alter_role_propagation to OFF;
 DROP SCHEMA alter_role CASCADE;

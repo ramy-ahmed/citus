@@ -23,15 +23,18 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
+static void ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static DefElem * makeDefElemInt(char *name, int value);
 
@@ -84,6 +87,57 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	List *commands = list_make1((void *) CreateAlterRoleIfExistsCommand(stmt));
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PreprocessAlterRoleSetStmt actually creates the plan we need to execute for alter
+ * role set statement.
+ */
+List *
+PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
+{
+	if (!EnableAlterRolePropagation)
+	{
+		return NIL;
+	}
+
+	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	ErrorIfUnsupportedAlterRoleSetStmt(stmt);
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * ErrorIfUnsupportedAlterRoleSetStmt raises an error if the AlterRoleSetStmt contains a
+ * construct that is not supported.
+ *
+ * Unsupported Constructs:
+ *  - ALTER ROLE ... SET ... FROM CURRENT
+ */
+static void
+ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
+{
+	VariableSetStmt *setStmt = stmt->setstmt;
+
+	if (setStmt->kind == VAR_SET_CURRENT)
+	{
+		/* check if the set action is a SET ... FROM CURRENT */
+		ereport(ERROR, (errmsg("unsupported ALTER ROLE ... SET ... FROM "
+							   "CURRENT for a distributed role"),
+						errhint("SET FROM CURRENT is not supported for "
+								"distributed users, instead use the SET ... "
+								"TO ... syntax with a constant value.")));
+	}
 }
 
 

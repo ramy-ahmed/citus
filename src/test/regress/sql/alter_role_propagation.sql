@@ -78,11 +78,48 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 
 
--- table belongs to a role
+-- give login permissions so that we can connect and check if the previous queries were propagated
+ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
 
 
--- we don't support propagation of configuration_parameters and notice the users
+-- alter configuration_parameter defaults for a user
 ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
+ALTER ROLE alter_role_1 IN DATABASE template1 SET "citus.setting;'" TO 'hello '' world';;
+
+-- as the defaults take effect on new connections, reconnect as the test user
+\c - alter_role_1
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+-- verify that the config defaults are propagated in the workers
+\c - - - :worker_1_port
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+\c template1 alter_role_1
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+\c regression postgres
+
+ALTER ROLE alter_role_1 RESET ALL;
+
+\c - alter_role_1
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+\c template1 alter_role_1
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+\c regression postgres
+ALTER ROLE ALL IN DATABASE template1 RESET ALL;
+
+\c template1 alter_role_1
+SHOW enable_hashagg;
+SHOW "citus.setting;'";
+
+\c regression postgres
 
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
