@@ -84,42 +84,60 @@ ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
 
 -- alter configuration_parameter defaults for a user
 ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
-ALTER ROLE alter_role_1 IN DATABASE template1 SET "citus.setting;'" TO 'hello '' world';;
+ALTER ROLE alter_role_1 IN DATABASE template1 SET enable_hashjoin TO 0;
 
 -- as the defaults take effect on new connections, reconnect as the test user
 \c - alter_role_1
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
+
+\c template1
+SHOW enable_hashagg;
+SHOW enable_hashjoin;
 
 -- verify that the config defaults are propagated in the workers
-\c - - - :worker_1_port
+\c postgres - - :worker_1_port
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
 
-\c template1 alter_role_1
+\c template1
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
 
-\c regression postgres
-
+-- RESET ALL statement
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
 ALTER ROLE alter_role_1 RESET ALL;
 
+-- as the defaults take effect on new connections, reconnect as the test user
 \c - alter_role_1
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
 
-\c template1 alter_role_1
+\c template1
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
 
-\c regression postgres
-ALTER ROLE ALL IN DATABASE template1 RESET ALL;
-
-\c template1 alter_role_1
+-- verify that the config defaults are propagated in the workers
+\c regression alter_role_1 - :worker_2_port
 SHOW enable_hashagg;
-SHOW "citus.setting;'";
+SHOW enable_hashjoin;
 
-\c regression postgres
+\c template1
+SHOW enable_hashagg;
+SHOW enable_hashjoin;
+
+-- RESET ALL with IN DATABASE clause
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
+ALTER ROLE alter_role_1 IN DATABASE template1 RESET ALL;
+
+\c template1 alter_role_1 - :worker_1_port
+SHOW enable_hashagg;
+SHOW enable_hashjoin;
+
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
 
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;

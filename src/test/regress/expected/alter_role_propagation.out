@@ -237,13 +237,12 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
  (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
 (2 rows)
 
--- table belongs to a role
--- alter configuration_parameter defaults for a user
-ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
-ALTER ROLE alter_role_1 IN DATABASE template1 SET enable_hashjoin TO FALSE;
 -- give login permissions so that we can connect and check if the previous queries were propagated
 ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
-\c
+-- alter configuration_parameter defaults for a user
+ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
+ALTER ROLE alter_role_1 IN DATABASE template1 SET enable_hashjoin TO 0;
+-- as the defaults take effect on new connections, reconnect as the test user
 \c - alter_role_1
 SHOW enable_hashagg;
  enable_hashagg
@@ -257,7 +256,7 @@ SHOW enable_hashjoin;
  on
 (1 row)
 
-\c template1 alter_role_1
+\c template1
 SHOW enable_hashagg;
  enable_hashagg
 ---------------------------------------------------------------------
@@ -270,9 +269,38 @@ SHOW enable_hashjoin;
  off
 (1 row)
 
-\c regression postgres
+-- verify that the config defaults are propagated in the workers
+\c postgres - - :worker_1_port
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ on
+(1 row)
+
+\c template1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ off
+(1 row)
+
+-- RESET ALL statement
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
 ALTER ROLE alter_role_1 RESET ALL;
-ALTER ROLE alter_role_1 IN DATABASE template1 RESET ALL;
+-- as the defaults take effect on new connections, reconnect as the test user
 \c - alter_role_1
 SHOW enable_hashagg;
  enable_hashagg
@@ -286,7 +314,21 @@ SHOW enable_hashjoin;
  on
 (1 row)
 
-\c template1 alter_role_1
+\c template1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ off
+(1 row)
+
+-- verify that the config defaults are propagated in the workers
+\c regression alter_role_1 - :worker_2_port
 SHOW enable_hashagg;
  enable_hashagg
 ---------------------------------------------------------------------
@@ -299,9 +341,43 @@ SHOW enable_hashjoin;
  on
 (1 row)
 
-\c regression postgres
+\c template1
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ off
+(1 row)
+
+-- RESET ALL with IN DATABASE clause
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
+ALTER ROLE alter_role_1 IN DATABASE template1 RESET ALL;
+\c template1 alter_role_1 - :worker_1_port
+SHOW enable_hashagg;
+ enable_hashagg
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SHOW enable_hashjoin;
+ enable_hashjoin
+---------------------------------------------------------------------
+ on
+(1 row)
+
+\c regression postgres - :master_port
+SET citus.enable_alter_role_propagation to ON;
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
 NOTICE:  MD5 password cleared because of role rename
+NOTICE:  Citus partially supports ALTER ROLE for distributed databases
+DETAIL:  Citus does not propagate ALTER ROLE ... RENAME TO commands to workers
+HINT:  You can manually alter roles on workers.
 SET citus.enable_alter_role_propagation to OFF;
 DROP SCHEMA alter_role CASCADE;
