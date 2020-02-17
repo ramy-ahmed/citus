@@ -23,7 +23,6 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
@@ -109,11 +108,9 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	List *commandList = list_make1((void *) sql);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(ALL_WORKERS, commandList);
 }
 
 
