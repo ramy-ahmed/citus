@@ -176,9 +176,10 @@ typedef struct MultiExtendedOp
 	Node *limitOffset;
 	Node *havingQual;
 	List *distinctClause;
+	List *windowClause;
 	bool hasDistinctOn;
 	bool hasWindowFuncs;
-	List *windowClause;
+	bool hasNonPushableWindowFunction;
 } MultiExtendedOp;
 
 

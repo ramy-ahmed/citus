@@ -21,6 +21,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "rewrite/rewriteManip.h"
 
@@ -206,6 +207,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 
 	/* probably want to do this where we add sublinks to the master plan */
 	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
+	Assert(masterQuery->hasWindowFuncs == contain_window_function((Node *) masterQuery));
 
 	/*
 	 * We will overwrite the alias of the rangetable which describes the custom scan.
