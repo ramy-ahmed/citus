@@ -136,8 +136,7 @@ ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
--- similar query with no distribution column is on the partition by clause
--- is not supported
+-- similar query with no distribution column on the partition by clause
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -270,6 +269,69 @@ WINDOW
 ORDER BY
 	user_id, value_1, 3, 4;
 
+-- repeat above 3 tests without grouping by distribution column
+SELECT
+	value_2,
+	rank() OVER (PARTITION BY value_2 ROWS BETWEEN
+				 UNBOUNDED PRECEDING AND CURRENT ROW),
+	dense_rank() OVER (PARTITION BY value_2 RANGE BETWEEN
+					   UNBOUNDED PRECEDING AND CURRENT ROW),
+	CUME_DIST() OVER (PARTITION BY value_2 RANGE BETWEEN
+					  UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING),
+	PERCENT_RANK() OVER (PARTITION BY value_2 ORDER BY avg(value_1) RANGE BETWEEN
+						 UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING)
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	4 DESC,3 DESC,2 DESC ,1 DESC;
+
+-- test exclude supported
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW),
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+ORDER BY
+	value_2, value_1, 3, 4;
+
+-- test <offset> preceding and <offset> following on RANGE window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER range_window,
+	array_agg(value_1) OVER range_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+WINDOW
+	range_window as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	range_window_exclude as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+
+-- test <offset> preceding and <offset> following on ROW window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER row_window,
+	array_agg(value_1) OVER row_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 and value_2 < 6
+WINDOW
+	row_window as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	row_window_exclude as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+
 -- some tests with GROUP BY, HAVING and LIMIT
 SELECT
 	user_id, sum(event_type) OVER my_win , event_type
@@ -346,6 +408,34 @@ GROUP BY
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
 $Q$);
+
+SELECT
+	value_2,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY value_2, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+
+SELECT
+	value_2, user_id,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY user_id, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1, 2
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+
+SELECT user_id, sum(avg(user_id)) OVER ()
+FROM users_table
+GROUP BY user_id
+ORDER BY 1
+LIMIT 10;
 
 SELECT
 	user_id,

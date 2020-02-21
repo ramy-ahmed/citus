@@ -206,7 +206,7 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
  *   - Only a single RTE_RELATION exists, which means only a single table
  *     name is specified on the whole query
  *   - No sublinks exists in the subquery
- *   - No window functions in the subquery
+ *   - No window functions exists in the subquery
  *
  * Note that the caller should still call DeferErrorIfUnsupportedSubqueryRepartition()
  * to ensure that Citus supports the subquery. Also, this function is designed to run
@@ -923,7 +923,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 {
 	char *errorMessage = NULL;
 	bool preconditionsSatisfied = true;
-	StringInfo errorInfo = NULL;
 	const char *errorHint = NULL;
 	const char *joinHint = "Consider joining tables on partition column and have "
 						   "equal filter on joining columns.";
@@ -940,18 +939,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorMessage = "could not run distributed query with subquery outside the "
 					   "FROM, WHERE and HAVING clauses";
 		errorHint = filterHint;
-	}
-
-	if (queryTree->hasWindowFuncs &&
-		!SafeToPushdownWindowFunction(queryTree, &errorInfo))
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query because the window "
-					   "function that is used cannot be pushed down";
-		errorHint = "Window functions are supported in two ways. Either add "
-					"an equality filter on the distributed tables' partition "
-					"column or use the window functions with a PARTITION BY "
-					"clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -1828,6 +1815,7 @@ MultiProjectNode(List *targetEntryList)
 MultiExtendedOp *
 MultiExtendedOpNode(Query *queryTree)
 {
+	StringInfo errorInfo = NULL;
 	MultiExtendedOp *extendedOpNode = CitusMakeNode(MultiExtendedOp);
 	extendedOpNode->targetList = queryTree->targetList;
 	extendedOpNode->groupClauseList = queryTree->groupClause;
@@ -1839,6 +1827,9 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;
 	extendedOpNode->hasWindowFuncs = queryTree->hasWindowFuncs;
 	extendedOpNode->windowClause = queryTree->windowClause;
+	extendedOpNode->hasNonPushableWindowFunction =
+		queryTree->hasWindowFuncs &&
+		!SafeToPushdownWindowFunction(queryTree, &errorInfo);
 
 	return extendedOpNode;
 }

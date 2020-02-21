@@ -27,7 +27,8 @@ typedef struct ExtendedOpNodeProperties
 	bool repartitionSubquery;
 	bool hasNonPartitionColumnDistinctAgg;
 	bool pullDistinctColumns;
-	bool pushDownWindowFunctions;
+	bool hasWindowFuncs;
+	bool hasNonPushableWindowFunction;
 	bool pullUpIntermediateRows;
 } ExtendedOpNodeProperties;
 
