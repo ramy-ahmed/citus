@@ -139,11 +139,11 @@ ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
 	if (setStmt->kind == VAR_SET_CURRENT)
 	{
 		/* check if the set action is a SET ... FROM CURRENT */
-		ereport(ERROR, (errmsg("unsupported ALTER ROLE ... SET ... FROM "
-							   "CURRENT for a distributed role"),
-						errhint("SET FROM CURRENT is not supported for "
-								"distributed users, instead use the SET ... "
-								"TO ... syntax with a constant value.")));
+		ereport(WARNING, (errmsg("not propagating ALTER ROLE .. SET .. FROM"
+								 " CURRENT command to worker nodes"),
+						  errhint("SET FROM CURRENT is not supported for "
+								  "distributed users, instead use the SET ... "
+								  "TO ... syntax with a constant value.")));
 	}
 }
 
@@ -297,20 +297,17 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 
 	for (i = 1; i <= ARR_DIMS(array)[0]; i++)
 	{
-		Datum d;
-		char *configItem;
-
-		d = array_ref(array, 1, &i,
-					  -1 /* varlenarray */,
-					  -1 /* TEXT's typlen */,
-					  false /* TEXT's typbyval */,
-					  'i' /* TEXT's typalign */,
-					  &isnull);
+		Datum d = array_ref(array, 1, &i,
+							-1 /* varlenarray */,
+							-1 /* TEXT's typlen */,
+							false /* TEXT's typbyval */,
+							'i' /* TEXT's typalign */,
+							&isnull);
 		if (isnull)
 		{
 			continue;
 		}
-		configItem = TextDatumGetCString(d);
+		char *configItem = TextDatumGetCString(d);
 
 		char *pos = strchr(configItem, '=');
 		if (pos == NULL)
