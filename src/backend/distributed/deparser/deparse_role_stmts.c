@@ -189,7 +189,7 @@ AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt)
 
 	if (stmt->database != NULL)
 	{
-		appendStringInfo(buf, " IN DATABASE %s", stmt->database);
+		appendStringInfo(buf, " IN DATABASE %s", quote_identifier(stmt->database));
 	}
 
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, stmt->setstmt);
