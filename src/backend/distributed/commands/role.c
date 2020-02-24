@@ -17,6 +17,8 @@
 #endif
 #include "catalog/catalog.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_db_role_setting.h"
+#include "commands/dbcommands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,6 +26,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
@@ -35,7 +38,14 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static void ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
+static char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
 static DefElem * makeDefElemInt(char *name, int value);
+
+char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription);
+char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
+										TupleDesc DbRoleSettingDescription);
+Node * makeStringConst(char *str, int location);
+char * WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role);
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
@@ -145,17 +155,54 @@ ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
 static const char *
 CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt)
 {
-	StringInfoData alterRoleQueryBuffer = { 0 };
-	const char *roleName = RoleSpecString(stmt->role, false);
-	const char *alterRoleQuery = DeparseTreeNode((Node *) stmt);
+	char *alterRoleQuery = DeparseTreeNode((Node *) stmt);
+	return WrapQueryInAlterRoleIfExistsCall(alterRoleQuery, stmt->role);
+}
 
-	initStringInfo(&alterRoleQueryBuffer);
-	appendStringInfo(&alterRoleQueryBuffer,
+
+/*
+ * CreateAlterRoleSetIfExistsCommand creates ALTER ROLE .. SET command, from the
+ * AlterRoleSetStmt node.
+ *
+ * If the statement affects a single user, the query is wrapped in a
+ * alter_role_if_exists() to make sure that it is run on workers that has a user
+ * with the same name. If the query is a ALTER ROLE ALL .. SET query, the query
+ * is sent to the workers as is.
+ */
+static char *
+CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt)
+{
+	char *alterRoleSetQuery = DeparseTreeNode((Node *) stmt);
+
+	/* ALTER ROLE ALL .. SET queries should not be wrapped in a alter_role_if_exists() call */
+	if (stmt->role == NULL)
+	{
+		return alterRoleSetQuery;
+	}
+	else
+	{
+		return WrapQueryInAlterRoleIfExistsCall(alterRoleSetQuery, stmt->role);
+	}
+}
+
+
+/*
+ * WrapQueryInAlterRoleIfExistsCall wraps a given query in a alter_role_if_exists()
+ * UDF.
+ */
+char *
+WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role)
+{
+	StringInfoData buffer = { 0 };
+
+	const char *roleName = RoleSpecString(role, false);
+	initStringInfo(&buffer);
+	appendStringInfo(&buffer,
 					 "SELECT alter_role_if_exists(%s, %s)",
 					 quote_literal_cstr(roleName),
-					 quote_literal_cstr(alterRoleQuery));
+					 quote_literal_cstr(query));
 
-	return alterRoleQueryBuffer.data;
+	return buffer.data;
 }
 
 
@@ -188,6 +235,100 @@ ExtractEncryptedPassword(Oid roleOid)
 	}
 
 	return pstrdup(TextDatumGetCString(passwordDatum));
+}
+
+
+/*
+ * GenerateAlterRoleSetIfExistsCommandList generate a list of ALTER ROLE .. SET commands that
+ * copies a role session defaults from the pg_db_role_settings table.
+ */
+static List *
+GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
+										DbRoleSettingDescription)
+{
+	AlterRoleSetStmt *stmt = makeNode(AlterRoleSetStmt);
+	const char *currentDatabaseName = CurrentDatabaseName();
+	List *commandList = NIL;
+
+	bool isnull;
+
+	/* Datum		setrole, setdatabase, setconfig; */
+
+	const char *databaseName =
+		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
+
+	/*
+	 * session defaults for databases other than the current one are skipped
+	 */
+	if (databaseName != NULL &&
+		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
+	{
+		return NULL;
+	}
+
+	if (databaseName != NULL)
+	{
+		stmt->database = pstrdup(databaseName);
+	}
+
+	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
+
+	/*
+	 * default roles are skipped, because reserved roles
+	 * cannot be altered.
+	 */
+	if (roleName != NULL && IsReservedName(roleName))
+	{
+		return NULL;
+	}
+
+	if (roleName != NULL)
+	{
+		stmt->role = makeNode(RoleSpec);
+		stmt->role->location = -1;
+		stmt->role->roletype = ROLESPEC_CSTRING;
+		stmt->role->rolename = pstrdup(roleName);
+	}
+
+	Datum setconfig = heap_getattr(tuple, Anum_pg_db_role_setting_setconfig,
+								   DbRoleSettingDescription, &isnull);
+	ArrayType *array = DatumGetArrayTypeP(setconfig);
+	int i;
+
+	for (i = 1; i <= ARR_DIMS(array)[0]; i++)
+	{
+		Datum d;
+		char *configItem;
+
+		d = array_ref(array, 1, &i,
+					  -1 /* varlenarray */,
+					  -1 /* TEXT's typlen */,
+					  false /* TEXT's typbyval */,
+					  'i' /* TEXT's typalign */,
+					  &isnull);
+		if (isnull)
+		{
+			continue;
+		}
+		configItem = TextDatumGetCString(d);
+
+		char *pos = strchr(configItem, '=');
+		if (pos == NULL)
+		{
+			continue;
+		}
+		*pos++ = '\0';
+
+		stmt->setstmt = makeNode(VariableSetStmt);
+		stmt->setstmt->kind = VAR_SET_VALUE;
+		stmt->setstmt->name = pstrdup(configItem);
+
+		/* TODO add support for const values that are not strings */
+		stmt->setstmt->args = list_make1(makeStringConst(pos, -1));
+
+		commandList = lappend(commandList, CreateAlterRoleSetIfExistsCommand(stmt));
+	}
+	return commandList;
 }
 
 
@@ -319,10 +460,111 @@ GenerateAlterRoleIfExistsCommandAllRoles()
 
 
 /*
+ * GenerateAlterRoleSetIfExistsCommandAllRoles creates ALTER ROLE .. SET commands
+ * that copies all session defaults for roles from the pg_db_role_setting table.
+ */
+List *
+GenerateAlterRoleSetIfExistsCommandAllRoles()
+{
+	Relation DbRoleSetting = heap_open(DbRoleSettingRelationId, AccessShareLock);
+	TupleDesc DbRoleSettingDescription = RelationGetDescr(DbRoleSetting);
+	HeapTuple tuple = NULL;
+	List *commands = NIL;
+	List *alterRoleSetQueries = NIL;
+
+
+#if PG_VERSION_NUM >= 120000
+	TableScanDesc scan = table_beginscan_catalog(DbRoleSetting, 0, NULL);
+#else
+	HeapScanDesc scan = heap_beginscan_catalog(DbRoleSetting, 0, NULL);
+#endif
+
+	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	{
+		alterRoleSetQueries =
+			GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
+
+		commands = list_concat(commands, (void *) alterRoleSetQueries);
+	}
+
+	heap_endscan(scan);
+	heap_close(DbRoleSetting, AccessShareLock);
+
+	return commands;
+}
+
+
+/*
  * makeDefElemInt creates a DefElem with integer typed value with -1 as location.
  */
 static DefElem *
 makeDefElemInt(char *name, int value)
 {
 	return makeDefElem(name, (Node *) makeInteger(value), -1);
+}
+
+
+/*
+ * GetDatabaseNameFromDbRoleSetting performs a lookup, and finds the database name
+ * associated with a Role Setting
+ */
+char *
+GetDatabaseNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription)
+{
+	bool isnull;
+
+	Datum setdatabase = heap_getattr(tuple, Anum_pg_db_role_setting_setdatabase,
+									 DbRoleSettingDescription, &isnull);
+
+	if (isnull)
+	{
+		return NULL;
+	}
+
+	Oid databaseId = DatumGetObjectId(setdatabase);
+	char *databaseName = get_database_name(databaseId);
+
+	return databaseName;
+}
+
+
+/*
+ * GetDatabaseNameFromDbRoleSetting performs a lookup, and finds the role name
+ * associated with a Role Setting
+ */
+char *
+GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription)
+{
+	bool isnull;
+
+	Datum setrole = heap_getattr(tuple, Anum_pg_db_role_setting_setrole,
+								 DbRoleSettingDescription, &isnull);
+
+	if (isnull)
+	{
+		return NULL;
+	}
+
+	Oid roleId = DatumGetObjectId(setrole);
+	char *roleName = GetUserNameFromId(roleId, true);
+
+	return roleName;
+}
+
+
+/*
+ * makeStringConst creates a Const Node that stores a given string
+ *
+ * copied from backend/parser/gram.c
+ */
+Node *
+makeStringConst(char *str, int location)
+{
+	A_Const *n = makeNode(A_Const);
+
+	n->val.type = T_String;
+	n->val.val.str = str;
+	n->location = location;
+
+	return (Node *) n;
 }
