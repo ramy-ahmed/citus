@@ -83,61 +83,37 @@ ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
 
 
 -- alter configuration_parameter defaults for a user
-ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
-ALTER ROLE alter_role_1 IN DATABASE template1 SET enable_hashjoin TO 0;
+ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
+SELECT run_command_on_workers('SHOW enable_hashagg');
 
--- as the defaults take effect on new connections, reconnect as the test user
-\c - alter_role_1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
+-- reset to default values
+ALTER ROLE CURRENT_USER RESET enable_hashagg;
+SELECT run_command_on_workers('SHOW enable_hashagg');
 
-\c template1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
+-- provide role and database names
+ALTER ROLE alter_role_1 IN DATABASE regression SET enable_hashjoin TO 0;
 
--- verify that the config defaults are propagated in the workers
-\c postgres - - :worker_1_port
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
+SET ROLE alter_role_1;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
 
-\c template1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
-
--- RESET ALL statement
-\c regression postgres - :master_port
-SET citus.enable_alter_role_propagation to ON;
-ALTER ROLE alter_role_1 RESET ALL;
-
--- as the defaults take effect on new connections, reconnect as the test user
-\c - alter_role_1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
-
-\c template1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
-
--- verify that the config defaults are propagated in the workers
-\c regression alter_role_1 - :worker_2_port
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
-
-\c template1
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
+-- make sure that only alter_role_1 was affected
+RESET ROLE;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
 
 -- RESET ALL with IN DATABASE clause
-\c regression postgres - :master_port
-SET citus.enable_alter_role_propagation to ON;
-ALTER ROLE alter_role_1 IN DATABASE template1 RESET ALL;
+ALTER ROLE alter_role_1 IN DATABASE regression RESET ALL;
+ALTER ROLE alter_role_1 RESET ALL;
+ALTER ROLE ALL RESET ALL;
 
-\c template1 alter_role_1 - :worker_1_port
-SHOW enable_hashagg;
-SHOW enable_hashjoin;
+-- the session defaults should be updated on master_add_node
+SELECT master_remove_node('localhost', :worker_1_port);
+ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT run_command_on_workers('SHOW enable_mergejoin');
 
-\c regression postgres - :master_port
-SET citus.enable_alter_role_propagation to ON;
+-- revert back to defaults
+ALTER ROLE SESSION_USER RESET enable_mergejoin;
+SELECT run_command_on_workers('SHOW enable_mergejoin');
 
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
@@ -145,3 +121,4 @@ ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
 SET citus.enable_alter_role_propagation to OFF;
 
 DROP SCHEMA alter_role CASCADE;
+ALTER ROLE alter_role_1;
