@@ -139,11 +139,11 @@ ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
 	if (setStmt->kind == VAR_SET_CURRENT)
 	{
 		/* check if the set action is a SET ... FROM CURRENT */
-		ereport(WARNING, (errmsg("not propagating ALTER ROLE .. SET .. FROM"
-								 " CURRENT command to worker nodes"),
-						  errhint("SET FROM CURRENT is not supported for "
-								  "distributed users, instead use the SET ... "
-								  "TO ... syntax with a constant value.")));
+		ereport(NOTICE, (errmsg("not propagating ALTER ROLE .. SET .. FROM"
+								" CURRENT command to worker nodes"),
+						 errhint("SET FROM CURRENT is not supported for "
+								 "distributed users, instead use the SET ... "
+								 "TO ... syntax with a constant value.")));
 	}
 }
 
@@ -249,10 +249,7 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 	AlterRoleSetStmt *stmt = makeNode(AlterRoleSetStmt);
 	const char *currentDatabaseName = CurrentDatabaseName();
 	List *commandList = NIL;
-
-	bool isnull;
-
-	/* Datum		setrole, setdatabase, setconfig; */
+	bool isnull = false;
 
 	const char *databaseName =
 		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
@@ -263,6 +260,12 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 	if (databaseName != NULL &&
 		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
 	{
+		ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE .. IN DATABASE"
+								" .. SET  for distributed databases"),
+						 errdetail("Citus propagates the session defaults that affect "
+								   "current database"),
+						 errhint("You can manually change attributes of roles "
+								 "on workers")));
 		return NULL;
 	}
 
