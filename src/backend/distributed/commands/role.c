@@ -18,6 +18,7 @@
 #include "catalog/catalog.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
@@ -295,36 +296,38 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 
 	Datum setconfig = heap_getattr(tuple, Anum_pg_db_role_setting_setconfig,
 								   DbRoleSettingDescription, &isnull);
-	ArrayType *array = DatumGetArrayTypeP(setconfig);
+
+	Datum *configs;
+	int nconfigs;
 	int i;
 
-	for (i = 1; i <= ARR_DIMS(array)[0]; i++)
-	{
-		Datum d = array_ref(array, 1, &i,
-							-1 /* varlenarray */,
-							-1 /* TEXT's typlen */,
-							false /* TEXT's typbyval */,
-							'i' /* TEXT's typalign */,
-							&isnull);
-		if (isnull)
-		{
-			continue;
-		}
-		char *configItem = TextDatumGetCString(d);
+	deconstruct_array(DatumGetArrayTypeP(setconfig),
+					  TEXTOID, -1, false, 'i',
+					  &configs, NULL, &nconfigs);
 
-		char *pos = strchr(configItem, '=');
-		if (pos == NULL)
+	for (i = 0; i < nconfigs; i++)
+	{
+		char *config = TextDatumGetCString(configs[i]);
+
+		char *seperator = strchr(config, '=');
+
+		/*
+		 * Each array element should have the form name=value.  If the "="
+		 * is missing for some reason, ignore it
+		 */
+		if (seperator == NULL)
 		{
 			continue;
 		}
-		*pos++ = '\0';
+
+		*seperator++ = '\0';
 
 		stmt->setstmt = makeNode(VariableSetStmt);
 		stmt->setstmt->kind = VAR_SET_VALUE;
-		stmt->setstmt->name = pstrdup(configItem);
+		stmt->setstmt->name = pstrdup(config);
 
 		/* TODO add support for const values that are not strings */
-		stmt->setstmt->args = list_make1(makeStringConst(pos, -1));
+		stmt->setstmt->args = list_make1(makeStringConst(seperator, -1));
 
 		commandList = lappend(commandList, CreateAlterRoleSetIfExistsCommand(stmt));
 	}
