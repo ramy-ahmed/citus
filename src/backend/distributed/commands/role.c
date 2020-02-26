@@ -46,7 +46,11 @@ char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDesc
 char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 										TupleDesc DbRoleSettingDescription);
 Node * makeStringConst(char *str, int location);
+Node * makeIntConst(int val, int location);
+Node * makeFloatConst(char *str, int location);
 char * WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role);
+List * MakeSetStatementArgsList(char *configurationValue);
+
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
@@ -325,9 +329,7 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 		stmt->setstmt = makeNode(VariableSetStmt);
 		stmt->setstmt->kind = VAR_SET_VALUE;
 		stmt->setstmt->name = pstrdup(config);
-
-		/* TODO add support for const values that are not strings */
-		stmt->setstmt->args = list_make1(makeStringConst(seperator, -1));
+		stmt->setstmt->args = MakeSetStatementArgsList(seperator);
 
 		commandList = lappend(commandList, CreateAlterRoleSetIfExistsCommand(stmt));
 	}
@@ -556,6 +558,37 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 
 
 /*
+ * MakeSetStatementArgsList parses a configuraton value and creates an A_Const
+ * with an appropriate type.
+ *
+ * The allowed A_Const types are Integer, Float, and String.
+ */
+List *
+MakeSetStatementArgsList(char *configurationValue)
+{
+	char *endPointer;
+
+	/* try to parse the configuration value as an integer */
+	long integerCandidate = strtol(configurationValue, &endPointer, 10);
+	if (*endPointer == '\0' && errno == 0 &&
+		integerCandidate <= INT_MAX && integerCandidate >= INT_MIN)
+	{
+		return list_make1(makeIntConst(integerCandidate, -1));
+	}
+
+	/* try to parse the configuration value as a float */
+	strtod(configurationValue, &endPointer);
+	if (*endPointer == '\0')
+	{
+		return list_make1(makeFloatConst(configurationValue, -1));
+	}
+
+	/* create a string constant as we exhausted all our previous options */
+	return list_make1(makeStringConst(configurationValue, -1));
+}
+
+
+/*
  * makeStringConst creates a Const Node that stores a given string
  *
  * copied from backend/parser/gram.c
@@ -566,6 +599,42 @@ makeStringConst(char *str, int location)
 	A_Const *n = makeNode(A_Const);
 
 	n->val.type = T_String;
+	n->val.val.str = str;
+	n->location = location;
+
+	return (Node *) n;
+}
+
+
+/*
+ * makeIntConst creates a Const Node that stores a given integer
+ *
+ * copied from backend/parser/gram.c
+ */
+Node *
+makeIntConst(int val, int location)
+{
+	A_Const *n = makeNode(A_Const);
+
+	n->val.type = T_Integer;
+	n->val.val.ival = val;
+	n->location = location;
+
+	return (Node *) n;
+}
+
+
+/*
+ * makeIntConst creates a Const Node that stores a given Float
+ *
+ * copied from backend/parser/gram.c
+ */
+Node *
+makeFloatConst(char *str, int location)
+{
+	A_Const *n = makeNode(A_Const);
+
+	n->val.type = T_Float;
 	n->val.val.str = str;
 	n->location = location;
 
