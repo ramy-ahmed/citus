@@ -21,6 +21,7 @@
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
@@ -566,21 +567,38 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 List *
 MakeSetStatementArgsList(char *configurationValue)
 {
-	char *endPointer;
+	List *argList = NIL;
 
-	/* try to parse the configuration value as an integer */
-	long integerCandidate = strtol(configurationValue, &endPointer, 10);
-	if (*endPointer == '\0' && errno == 0 &&
-		integerCandidate <= INT_MAX && integerCandidate >= INT_MIN)
+	/*
+	 * Try to parse the configuration value as an integer, and swallow all
+	 * errors.
+	 */
+	PG_TRY();
 	{
-		return list_make1(makeIntConst(integerCandidate, -1));
+		long longValue = SafeStringToInt64(configurationValue);
+		argList = list_make1(makeIntConst(longValue, -1));
+	}
+	PG_END_TRY();
+
+	if (argList != NIL)
+	{
+		return argList;
 	}
 
-	/* try to parse the configuration value as a float */
-	strtod(configurationValue, &endPointer);
-	if (*endPointer == '\0')
+	/*
+	 * Try to parse the configuration value as a float, and swallow all
+	 * errors.
+	 */
+	PG_TRY();
 	{
-		return list_make1(makeFloatConst(configurationValue, -1));
+		SafeStringToFloat(configurationValue);
+		argList = list_make1(makeFloatConst(configurationValue, -1));
+	}
+	PG_END_TRY();
+
+	if (argList != NIL)
+	{
+		return argList;
 	}
 
 	/* create a string constant as we exhausted all our previous options */
