@@ -112,7 +112,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 List *
 PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 {
-	if (!EnableAlterRolePropagation)
+	if (!EnableAlterRolePropagation || !IsCoordinator())
 	{
 		return NIL;
 	}
@@ -120,7 +120,6 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
 	ErrorIfUnsupportedAlterRoleSetStmt(stmt);
 
-	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
