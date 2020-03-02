@@ -567,7 +567,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 List *
 MakeSetStatementArgsList(char *configurationValue)
 {
-	List *argList = NIL;
+	volatile List *argList = NIL;
 
 	/*
 	 * Try to parse the configuration value as an integer, and swallow all
@@ -577,6 +577,10 @@ MakeSetStatementArgsList(char *configurationValue)
 	{
 		long longValue = SafeStringToInt64(configurationValue);
 		argList = list_make1(makeIntConst(longValue, -1));
+	}
+	PG_CATCH();
+	{
+		argList = NIL;
 	}
 	PG_END_TRY();
 
@@ -593,6 +597,10 @@ MakeSetStatementArgsList(char *configurationValue)
 	{
 		SafeStringToFloat(configurationValue);
 		argList = list_make1(makeFloatConst(configurationValue, -1));
+	}
+	PG_CATCH();
+	{
+		argList = NIL;
 	}
 	PG_END_TRY();
 
