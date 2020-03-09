@@ -51,6 +51,7 @@ static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static Node * MakeSetStatementArgument(char *configurationValue);
+static void ParseConfigOption(const char *string, char **name, char **value);
 
 
 /* controlled via GUC */
@@ -312,29 +313,57 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 	for (i = 0; i < nconfigs; i++)
 	{
 		char *config = TextDatumGetCString(configs[i]);
+		char *name = NULL;
+		char *value = NULL;
 
-		char *seperator = strchr(config, '=');
-
-		/*
-		 * Each array element should have the form name=value.  If the "="
-		 * is missing for some reason, ignore it
-		 */
-		if (seperator == NULL)
-		{
-			continue;
-		}
-
-		*seperator++ = '\0';
+		ParseConfigOption(config, &name, &value);
 
 		stmt->setstmt = makeNode(VariableSetStmt);
 		stmt->setstmt->kind = VAR_SET_VALUE;
-		stmt->setstmt->name = pstrdup(config);
-		stmt->setstmt->args = list_make1(MakeSetStatementArgument(seperator));
+		stmt->setstmt->name = name;
+		stmt->setstmt->args = list_make1(MakeSetStatementArgument(value));
 
 		commandList = lappend(commandList,
 							  (void *) CreateAlterRoleSetIfExistsCommand(stmt));
 	}
 	return commandList;
+}
+
+
+/*
+ * ParseConfigOption takes a string of the form "some-option=some value" and
+ * returns name = "some-option" and value = "some value" in malloc'ed
+ * storage.
+ *
+ * Most of the logic is copied from ParseLongOption in backedn/utils/misc/guc.c
+ * with one major difference: '-' is not converted to '_' in the option name here.
+ *
+ * If there is no '=' in the input string then value will be NULL.
+ */
+static void
+ParseConfigOption(const char *string, char **name, char **value)
+{
+	size_t equalPosition;
+
+	AssertArg(string);
+	AssertArg(name);
+	AssertArg(value);
+
+	equalPosition = strcspn(string, "=");
+
+	if (string[equalPosition] == '=')
+	{
+		*name = palloc(equalPosition + 1);
+		strlcpy(*name, string, equalPosition + 1);
+
+		*value = pstrdup(&string[equalPosition + 1]);
+	}
+	else
+	{
+		/* no equal sign in string */
+		*name = pstrdup(string);
+		*value = NULL;
+	}
 }
 
 
