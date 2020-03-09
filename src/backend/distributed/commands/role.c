@@ -46,11 +46,11 @@ static DefElem * makeDefElemInt(char *name, int value);
 char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription);
 char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 										TupleDesc DbRoleSettingDescription);
-Node * makeStringConst(char *str, int location);
-Node * makeIntConst(int val, int location);
-Node * makeFloatConst(char *str, int location);
-char * WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role);
-List * MakeSetStatementArgsList(char *configurationValue);
+static Node * makeStringConst(char *str, int location);
+static Node * makeIntConst(int val, int location);
+static Node * makeFloatConst(char *str, int location);
+static char * WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role);
+static List * MakeSetStatementArgsList(char *configurationValue);
 
 
 /* controlled via GUC */
@@ -195,7 +195,7 @@ CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt)
  * WrapQueryInAlterRoleIfExistsCall wraps a given query in a alter_role_if_exists()
  * UDF.
  */
-char *
+static char *
 WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role)
 {
 	StringInfoData buffer = { 0 };
@@ -563,7 +563,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
  *
  * The allowed A_Const types are Integer, Float, and String.
  */
-List *
+static List *
 MakeSetStatementArgsList(char *configurationValue)
 {
 	volatile List *argList = NIL;
@@ -585,7 +585,7 @@ MakeSetStatementArgsList(char *configurationValue)
 
 	if (argList != NIL)
 	{
-		return argList;
+		return (List *) argList;
 	}
 
 	/*
@@ -605,7 +605,7 @@ MakeSetStatementArgsList(char *configurationValue)
 
 	if (argList != NIL)
 	{
-		return argList;
+		return (List *) argList;
 	}
 
 	/* create a string constant as we exhausted all our previous options */
@@ -618,7 +618,7 @@ MakeSetStatementArgsList(char *configurationValue)
  *
  * copied from backend/parser/gram.c
  */
-Node *
+static Node *
 makeStringConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
@@ -636,7 +636,7 @@ makeStringConst(char *str, int location)
  *
  * copied from backend/parser/gram.c
  */
-Node *
+static Node *
 makeIntConst(int val, int location)
 {
 	A_Const *n = makeNode(A_Const);
@@ -654,7 +654,7 @@ makeIntConst(int val, int location)
  *
  * copied from backend/parser/gram.c
  */
-Node *
+static Node *
 makeFloatConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
