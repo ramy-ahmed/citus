@@ -40,7 +40,7 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static void ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
-static char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
+static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
 static DefElem * makeDefElemInt(char *name, int value);
 
 char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription);
@@ -49,7 +49,7 @@ char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 static Node * makeStringConst(char *str, int location);
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
-static char * WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role);
+static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static List * MakeSetStatementArgsList(char *configurationValue);
 
 
@@ -160,7 +160,7 @@ ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
 static const char *
 CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt)
 {
-	char *alterRoleQuery = DeparseTreeNode((Node *) stmt);
+	const char *alterRoleQuery = DeparseTreeNode((Node *) stmt);
 	return WrapQueryInAlterRoleIfExistsCall(alterRoleQuery, stmt->role);
 }
 
@@ -174,7 +174,7 @@ CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt)
  * with the same name. If the query is a ALTER ROLE ALL .. SET query, the query
  * is sent to the workers as is.
  */
-static char *
+static const char *
 CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt)
 {
 	char *alterRoleSetQuery = DeparseTreeNode((Node *) stmt);
@@ -195,8 +195,8 @@ CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt)
  * WrapQueryInAlterRoleIfExistsCall wraps a given query in a alter_role_if_exists()
  * UDF.
  */
-static char *
-WrapQueryInAlterRoleIfExistsCall(char *query, RoleSpec *role)
+static const char *
+WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role)
 {
 	StringInfoData buffer = { 0 };
 
@@ -331,7 +331,8 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 		stmt->setstmt->name = pstrdup(config);
 		stmt->setstmt->args = MakeSetStatementArgsList(seperator);
 
-		commandList = lappend(commandList, CreateAlterRoleSetIfExistsCommand(stmt));
+		commandList = lappend(commandList,
+							  (void *) CreateAlterRoleSetIfExistsCommand(stmt));
 	}
 	return commandList;
 }
