@@ -50,9 +50,9 @@ static Node * makeStringConst(char *str, int location);
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
+static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static Node * MakeSetStatementArgument(char *configurationValue);
 static void ParseConfigOption(const char *string, char **name, char **value);
-
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
@@ -310,23 +310,36 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 					  TEXTOID, -1, false, 'i',
 					  &configs, NULL, &nconfigs);
 
+	/* iterate over the list of configurations, and append the sql command to the list */
 	for (i = 0; i < nconfigs; i++)
 	{
 		char *config = TextDatumGetCString(configs[i]);
-		char *name = NULL;
-		char *value = NULL;
-
-		ParseConfigOption(config, &name, &value);
-
-		stmt->setstmt = makeNode(VariableSetStmt);
-		stmt->setstmt->kind = VAR_SET_VALUE;
-		stmt->setstmt->name = name;
-		stmt->setstmt->args = list_make1(MakeSetStatementArgument(value));
-
+		stmt->setstmt = MakeVariableSetStmt(config);
 		commandList = lappend(commandList,
 							  (void *) CreateAlterRoleSetIfExistsCommand(stmt));
 	}
 	return commandList;
+}
+
+
+/*
+ * MakeVariableSetStmt takes a "some-option=some value" string and creates a
+ * VariableSetStmt Node.
+ */
+static VariableSetStmt *
+MakeVariableSetStmt(const char *config)
+{
+	char *name = NULL;
+	char *value = NULL;
+
+	ParseConfigOption(config, &name, &value);
+
+	VariableSetStmt *variableSetStmt = makeNode(VariableSetStmt);
+	variableSetStmt->kind = VAR_SET_VALUE;
+	variableSetStmt->name = name;
+	variableSetStmt->args = list_make1(MakeSetStatementArgument(value));
+
+	return variableSetStmt;
 }
 
 
