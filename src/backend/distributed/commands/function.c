@@ -410,7 +410,7 @@ static void
 EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnType,
 									  Oid sourceRelationId)
 {
-	DistTableCacheEntry *sourceTableEntry = DistributedTableCacheEntry(sourceRelationId);
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 
