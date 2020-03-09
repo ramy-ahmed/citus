@@ -50,7 +50,7 @@ static Node * makeStringConst(char *str, int location);
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
-static List * MakeSetStatementArgsList(char *configurationValue);
+static Node * MakeSetStatementArgument(char *configurationValue);
 
 
 /* controlled via GUC */
@@ -329,7 +329,7 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 		stmt->setstmt = makeNode(VariableSetStmt);
 		stmt->setstmt->kind = VAR_SET_VALUE;
 		stmt->setstmt->name = pstrdup(config);
-		stmt->setstmt->args = MakeSetStatementArgsList(seperator);
+		stmt->setstmt->args = list_make1(MakeSetStatementArgument(seperator));
 
 		commandList = lappend(commandList,
 							  (void *) CreateAlterRoleSetIfExistsCommand(stmt));
@@ -559,15 +559,15 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 
 
 /*
- * MakeSetStatementArgsList parses a configuraton value and creates an A_Const
+ * MakeSetStatementArgs parses a configuraton value and creates an A_Const
  * with an appropriate type.
  *
  * The allowed A_Const types are Integer, Float, and String.
  */
-static List *
-MakeSetStatementArgsList(char *configurationValue)
+static Node *
+MakeSetStatementArgument(char *configurationValue)
 {
-	volatile List *argList = NIL;
+	volatile Node *arg = NULL;
 
 	/*
 	 * Try to parse the configuration value as an integer, and swallow all
@@ -576,17 +576,17 @@ MakeSetStatementArgsList(char *configurationValue)
 	PG_TRY();
 	{
 		long longValue = SafeStringToInt64(configurationValue);
-		argList = list_make1(makeIntConst(longValue, -1));
+		arg = makeIntConst(longValue, -1);
 	}
 	PG_CATCH();
 	{
-		argList = NIL;
+		arg = NULL;
 	}
 	PG_END_TRY();
 
-	if (argList != NIL)
+	if (arg != NULL)
 	{
-		return (List *) argList;
+		return (Node *) arg;
 	}
 
 	/*
@@ -596,21 +596,21 @@ MakeSetStatementArgsList(char *configurationValue)
 	PG_TRY();
 	{
 		SafeStringToFloat(configurationValue);
-		argList = list_make1(makeFloatConst(configurationValue, -1));
+		arg = makeFloatConst(configurationValue, -1);
 	}
 	PG_CATCH();
 	{
-		argList = NIL;
+		arg = NULL;
 	}
 	PG_END_TRY();
 
-	if (argList != NIL)
+	if (arg != NULL)
 	{
-		return (List *) argList;
+		return (Node *) arg;
 	}
 
 	/* create a string constant as we exhausted all our previous options */
-	return list_make1(makeStringConst(configurationValue, -1));
+	return makeStringConst(configurationValue, -1);
 }
 
 
