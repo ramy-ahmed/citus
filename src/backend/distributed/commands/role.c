@@ -310,7 +310,11 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 					  TEXTOID, -1, false, 'i',
 					  &configs, NULL, &nconfigs);
 
-	/* iterate over the list of configurations, and append the sql command to the list */
+	/*
+	 * A tuple might contain one or more settings that apply to the user-database combination.
+	 * ALTER ROLE ... SET ... only allows to set one at a time. We will create a statement for every
+	 * configuration contained in the tuple.
+	 */
 	for (i = 0; i < nconfigs; i++)
 	{
 		char *config = TextDatumGetCString(configs[i]);
