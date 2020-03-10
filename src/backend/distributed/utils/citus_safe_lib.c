@@ -184,10 +184,14 @@ SafeStringToFloat(const char *str)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, no digits found\n", str)));
 	}
+
+/* If the current platform has HUGE_VALF, check for overflows */
+#ifdef HUGE_VALF
 	else if (errno == ERANGE && (number == HUGE_VALF || number == -HUGE_VALF))
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, overflow occured\n", str)));
 	}
+#endif
 	else if (errno == ERANGE && number <= FLT_MIN && number >= -FLT_MIN)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, underflow occured\n", str)));
