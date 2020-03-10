@@ -277,10 +277,21 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 		messageDetail = pchomp(PQerrorMessage(pgConn));
 	}
 
-	ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-					 errmsg("connection error: %s:%d", nodeName, nodePort),
-					 messageDetail != NULL ?
-					 errdetail("%s", ApplyLogRedaction(messageDetail)) : 0));
+
+	if (messageDetail)
+	{
+		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("connection failure from the "
+								"coordinator to the worker(%s:%d): %s",
+								nodeName, nodePort, ApplyLogRedaction(messageDetail))));
+	}
+	else
+	{
+		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("connection failure from the "
+								"coordinator to the worker(%s:%d)",
+								nodeName, nodePort)));
+	}
 }
 
 
