@@ -186,7 +186,7 @@ SafeStringToFloat(const char *str)
 	}
 
 /* If the current platform has HUGE_VALF, check for overflows */
-#ifdef HUGE_VALF
+#if defined(HUGE_VALF)
 	else if (errno == ERANGE && (number == HUGE_VALF || number == -HUGE_VALF))
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, overflow occured\n", str)));
