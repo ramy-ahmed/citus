@@ -352,7 +352,7 @@ MakeVariableSetStmt(const char *config)
  * returns name = "some-option" and value = "some value" in malloc'ed
  * storage.
  *
- * Most of the logic is copied from ParseLongOption in backedn/utils/misc/guc.c
+ * Most of the logic is copied from ParseLongOption in backend/utils/misc/guc.c
  * with one major difference: '-' is not converted to '_' in the option name here.
  *
  * If there is no '=' in the input string then value will be NULL.
