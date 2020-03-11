@@ -18,6 +18,7 @@
 
 #include <float.h>
 #include <limits.h>
+#include <math.h>
 
 #include "distributed/citus_safe_lib.h"
 #include "lib/stringinfo.h"
@@ -184,14 +185,10 @@ SafeStringToFloat(const char *str)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, no digits found\n", str)));
 	}
-
-/* If the current platform has HUGE_VALF, check for overflows */
-#if defined(HUGE_VALF)
 	else if (errno == ERANGE && (number == HUGE_VALF || number == -HUGE_VALF))
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, overflow occured\n", str)));
 	}
-#endif
 	else if (errno == ERANGE && number <= FLT_MIN && number >= -FLT_MIN)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as float, underflow occured\n", str)));
