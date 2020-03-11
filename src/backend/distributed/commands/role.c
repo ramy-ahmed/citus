@@ -360,13 +360,11 @@ MakeVariableSetStmt(const char *config)
 static void
 ParseConfigOption(const char *string, char **name, char **value)
 {
-	size_t equalPosition;
-
 	AssertArg(string);
 	AssertArg(name);
 	AssertArg(value);
 
-	equalPosition = strcspn(string, "=");
+	size_t equalPosition = strcspn(string, "=");
 
 	if (string[equalPosition] == '=')
 	{
