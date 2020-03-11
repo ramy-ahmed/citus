@@ -1447,3 +1447,35 @@ LIMIT 5;
                                              ->  Seq Scan on users_table_1400256 users_table
 (16 rows)
 
+-- Window function with inlined CTE
+WITH cte as (
+    SELECT uref.id user_id, events_table.value_2, count(*) c
+    FROM events_table
+    JOIN users_ref_test_table uref ON uref.id = events_table.user_id
+    GROUP BY 1, 2
+)
+SELECT DISTINCT cte.value_2, cte.c, sum(cte.value_2) OVER (PARTITION BY cte.c)
+FROM cte JOIN events_table et ON et.value_2 = cte.value_2 and et.value_2 = cte.c
+ORDER BY 1;
+ value_2 | c | sum
+---------------------------------------------------------------------
+       3 | 3 | 108
+       4 | 4 |  56
+(2 rows)
+
+-- Partition by reference table column joined to distribution column
+SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
+SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk
+FROM events_table
+JOIN users_ref_test_table uref ON uref.id = events_table.user_id) sq
+GROUP BY 1 ORDER BY 1;
+ value_2 |                                                              array_agg
+---------------------------------------------------------------------
+       0 | {686,686,816,816,987,987,1104}
+       1 | {500,500,675,675,675,686,686,816,816,816,987,987,987,987,987,1104,1104,1104,1104,1104,1104,1104}
+       2 | {500,500,500,500,675,675,675,675,675,686,686,686,686,816,816,816,816,816,987,987,987,987,987,987,987,1104,1104,1104,1104,1104,1104}
+       3 | {500,500,500,500,675,686,686,686,816,816,987,987,987,1104,1104,1104,1104,1104}
+       4 | {675,675,675,675,686,686,686,816,816,816,987,987,1104,1104}
+       5 | {675,675,816,816,987,987,1104,1104,1104}
+(6 rows)
+

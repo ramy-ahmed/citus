@@ -544,3 +544,22 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
+
+-- Window function with inlined CTE
+WITH cte as (
+    SELECT uref.id user_id, events_table.value_2, count(*) c
+    FROM events_table
+    JOIN users_ref_test_table uref ON uref.id = events_table.user_id
+    GROUP BY 1, 2
+)
+SELECT DISTINCT cte.value_2, cte.c, sum(cte.value_2) OVER (PARTITION BY cte.c)
+FROM cte JOIN events_table et ON et.value_2 = cte.value_2 and et.value_2 = cte.c
+ORDER BY 1;
+
+-- Partition by reference table column joined to distribution column
+SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
+SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk
+FROM events_table
+JOIN users_ref_test_table uref ON uref.id = events_table.user_id) sq
+GROUP BY 1 ORDER BY 1;
+
