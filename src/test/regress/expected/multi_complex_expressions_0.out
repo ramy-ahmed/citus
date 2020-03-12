@@ -459,7 +459,6 @@ SELECT o_custkey FROM orders GROUP BY o_custkey LIMIT 10 OFFSET 15;
 -- GROUP BY and ORDER BY non-aggregate -> push-down
 CREATE TEMP TABLE temp_limit_test_3 AS
 SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey LIMIT 10 OFFSET 15;
-DEBUG:  push down of limit count: 25
 -- GROUP BY and ORDER BY aggregate -> No push-down
 CREATE TEMP TABLE temp_limit_test_4 AS
 SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt DESC LIMIT 10 OFFSET 15;

@@ -395,7 +395,6 @@ SELECT
 	GROUP BY l_orderkey + 1
 	ORDER BY l_orderkey + 1
 	LIMIT 5;
-DEBUG:  push down of limit count: 5
  ?column?
 ---------------------------------------------------------------------
         2

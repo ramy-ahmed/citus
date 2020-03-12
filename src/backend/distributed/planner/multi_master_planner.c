@@ -211,7 +211,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 
 	/*
 	 * We will overwrite the alias of the rangetable which describes the custom scan.
-	 * Idealy we would have set the correct column names and alias on the range table in
+	 * Ideally we would have set the correct column names and alias on the range table in
 	 * the master query already when we inserted the extra data container. This could be
 	 * improved in the future.
 	 */

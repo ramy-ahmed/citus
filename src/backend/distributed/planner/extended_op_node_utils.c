@@ -49,6 +49,7 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 
 	List *tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
 	bool groupedByDisjointPartitionColumn =
+		!extendedOpNode->hasNonPushableWindowFunction &&
 		GroupedByPartitionColumn((MultiNode *) extendedOpNode, extendedOpNode);
 
 	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
