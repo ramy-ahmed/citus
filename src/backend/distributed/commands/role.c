@@ -27,6 +27,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -113,10 +114,12 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 List *
 PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 {
-	if (!EnableAlterRolePropagation || !IsCoordinator())
+	if (!EnableAlterRolePropagation)
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
 	ErrorIfUnsupportedAlterRoleSetStmt(stmt);
@@ -124,7 +127,9 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	List *commandList = list_make1((void *) sql);
+	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
+								   (void *) sql,
+								   ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commandList);
 }
