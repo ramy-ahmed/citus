@@ -290,6 +290,8 @@ static Const * MakeIntegerConstInt64(int64 integerValue);
 static bool RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
 								  ExtendedOpNodeProperties *extendedOpNodeProperties);
+static bool CanPushDownGroupingAndHaving(
+	ExtendedOpNodeProperties *extendedOpNodeProperties);
 static DeferredErrorMessage * DeferErrorIfContainsNonPushdownableAggregate(
 	MultiNode *logicalPlanNode);
 static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
@@ -1443,8 +1445,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
 	}
 
-	if (!extendedOpNodeProperties->groupedByDisjointPartitionColumn ||
-		extendedOpNodeProperties->hasNonPushableWindowFunction)
+	if (!CanPushDownGroupingAndHaving(extendedOpNodeProperties))
 	{
 		/*
 		 * Not pushing down GROUP BY, need to regroup on coordinator
@@ -2405,9 +2406,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 	 * if there is a group by, it contains distribution column).
 	 *
 	 */
-	if (extendedOpNodeProperties->groupedByDisjointPartitionColumn ||
-		(extendedOpNodeProperties->hasWindowFuncs &&
-		 !extendedOpNodeProperties->hasNonPushableWindowFunction))
+	if (CanPushDownGroupingAndHaving(extendedOpNodeProperties))
 	{
 		/*
 		 * We converted the having expression to a list in subquery pushdown
@@ -3528,7 +3527,7 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 
 
 /*
- * RequiresPushdown returns whether the expression can be pushed down to workers.
+ * CanPushDownExpression returns whether the expression can be pushed down to workers.
  */
 static bool
 CanPushDownExpression(Node *expression,
@@ -3557,6 +3556,19 @@ CanPushDownExpression(Node *expression,
 	}
 
 	return false;
+}
+
+
+/*
+ * CanPushDownGroupingAndHaving returns whether GROUP BY & HAVING should be
+ * pushed down to worker.
+ */
+static bool
+CanPushDownGroupingAndHaving(ExtendedOpNodeProperties *extendedOpNodeProperties)
+{
+	return extendedOpNodeProperties->groupedByDisjointPartitionColumn ||
+		   (extendedOpNodeProperties->hasWindowFuncs &&
+			!extendedOpNodeProperties->hasNonPushableWindowFunction);
 }
 
 
