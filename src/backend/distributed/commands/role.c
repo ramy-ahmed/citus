@@ -612,6 +612,7 @@ static Node *
 MakeSetStatementArgument(char *configurationValue)
 {
 	volatile Node *arg = NULL;
+	MemoryContext savedContext = CurrentMemoryContext;
 
 	/*
 	 * Try to parse the configuration value as an integer, and swallow all
@@ -625,6 +626,15 @@ MakeSetStatementArgument(char *configurationValue)
 	PG_CATCH();
 	{
 		arg = NULL;
+		MemoryContextSwitchTo(savedContext);
+		ErrorData *edata = CopyErrorData();
+		FlushErrorState();
+
+		/* don't try to intercept PANIC or FATAL, let those breeze past us */
+		if (edata->elevel != ERROR)
+		{
+			PG_RE_THROW();
+		}
 	}
 	PG_END_TRY();
 
@@ -645,6 +655,15 @@ MakeSetStatementArgument(char *configurationValue)
 	PG_CATCH();
 	{
 		arg = NULL;
+		MemoryContextSwitchTo(savedContext);
+		ErrorData *edata = CopyErrorData();
+		FlushErrorState();
+
+		/* don't try to intercept PANIC or FATAL, let those breeze past us */
+		if (edata->elevel != ERROR)
+		{
+			PG_RE_THROW();
+		}
 	}
 	PG_END_TRY();
 
