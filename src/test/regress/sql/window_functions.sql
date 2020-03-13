@@ -4,6 +4,16 @@
 
 -- a very simple window function with an aggregate and a window function
 -- distribution column is on the partition by clause
+create table ut as select * from users_table;
+SELECT
+	user_id, COUNT(*) OVER (PARTITION BY user_id),
+	rank() OVER (PARTITION BY user_id)
+FROM
+	ut
+ORDER BY
+	1 DESC, 2 DESC, 3 DESC
+LIMIT 5;
+
 SELECT
 	user_id, COUNT(*) OVER (PARTITION BY user_id),
 	rank() OVER (PARTITION BY user_id)
@@ -15,6 +25,17 @@ LIMIT 5;
 
 -- a more complicated window clause, including an aggregate
 -- in both the window clause and the target entry
+SELECT
+	user_id, avg(avg(value_3)) OVER (PARTITION BY user_id, MIN(value_2))
+FROM
+	ut
+GROUP BY
+	1
+ORDER BY
+	2 DESC NULLS LAST, 1 DESC;
+
+    set citus.log_remote_commands to on;
+    set client_min_messages to debug4;
 SELECT
 	user_id, avg(avg(value_3)) OVER (PARTITION BY user_id, MIN(value_2))
 FROM
@@ -41,6 +62,21 @@ GROUP BY
 	1, value_1
 ORDER BY
 	2 DESC, 1;
+    reset client_min_messages;
+    set citus.log_remote_commands to off;
+\c - - - :worker_1_port
+SELECT worker_column_1 AS user_id, max(worker_column_2) OVER (PARTITION BY worker_column_1, (min(worker_column_3))) AS max, worker_column_2 AS worker_column_3, min(worker_column_3) AS worker_column_4
+FROM (
+    SELECT s.user_id AS worker_column_1, s.value_1 AS worker_column_2, s.value_2 AS worker_column_3
+    FROM (SELECT DISTINCT us.user_id, us.value_2, us.value_1, random() AS r1 FROM public.users_table_1400257 us, public.events_table_1400261 events_table WHERE ((us.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) ORDER BY us.user_id, us.value_2) s
+) worker_subquery GROUP BY worker_column_1, worker_column_2;
+\c - - - :worker_2_port
+SELECT worker_column_1 AS user_id, max(worker_column_2) OVER (PARTITION BY worker_column_1, (min(worker_column_3))) AS max, worker_column_2 AS worker_column_3, min(worker_column_3) AS worker_column_4
+FROM (
+    SELECT s.user_id AS worker_column_1, s.value_1 AS worker_column_2, s.value_2 AS worker_column_3
+    FROM (SELECT DISTINCT us.user_id, us.value_2, us.value_1, random() AS r1 FROM public.users_table_1400257 us, public.events_table_1400261 events_table WHERE ((us.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) ORDER BY us.user_id, us.value_2) s
+) worker_subquery GROUP BY worker_column_1, worker_column_2;
+\c - - - :master_port
 
 -- window function operates on the results of
 -- a join
@@ -270,6 +306,7 @@ ORDER BY
 	user_id, value_1, 3, 4;
 
 -- repeat above 3 tests without grouping by distribution column
+set citus.log_remote_commands to on;
 SELECT
 	value_2,
 	rank() OVER (PARTITION BY value_2 ROWS BETWEEN
@@ -286,6 +323,7 @@ GROUP BY
 	1
 ORDER BY
 	4 DESC,3 DESC,2 DESC ,1 DESC;
+set citus.log_remote_commands to off;
 
 -- test exclude supported
 SELECT
@@ -374,6 +412,18 @@ LIMIT
 SELECT
 	DISTINCT ON (SUM(value_1) OVER (PARTITION BY user_id)) user_id, SUM(value_2) OVER (PARTITION BY user_id)
 FROM
+	ut
+GROUP BY
+	user_id, value_1, value_2
+HAVING count(*) > 2
+ORDER BY
+	(SUM(value_1) OVER (PARTITION BY user_id)) , 2 DESC, 1
+LIMIT
+	10;
+
+SELECT
+	DISTINCT ON (SUM(value_1) OVER (PARTITION BY user_id)) user_id, SUM(value_2) OVER (PARTITION BY user_id)
+FROM
 	users_table
 GROUP BY
 	user_id, value_1, value_2
@@ -431,11 +481,15 @@ GROUP BY
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
 
+    set citus.log_remote_commands to on;
+    set client_min_messages to debug4;
 SELECT user_id, sum(avg(user_id)) OVER ()
 FROM users_table
 GROUP BY user_id
-ORDER BY 1
-LIMIT 10;
+--ORDER BY 1
+;--LIMIT 10;
+    reset client_min_messages;
+    set citus.log_remote_commands to off;
 
 SELECT
 	user_id,

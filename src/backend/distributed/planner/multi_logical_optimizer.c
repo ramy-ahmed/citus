@@ -289,9 +289,10 @@ static Const * MakeIntegerConstInt64(int64 integerValue);
 /* Local functions forward declarations for aggregate expression checks */
 static bool RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
-								  ExtendedOpNodeProperties *extendedOpNodeProperties);
-static bool CanPushDownGroupingAndHaving(
-	ExtendedOpNodeProperties *extendedOpNodeProperties);
+								  const ExtendedOpNodeProperties *extendedOpNodeProperties);
+static bool CanPushDownGroupingAndHaving(const
+										 ExtendedOpNodeProperties *
+										 extendedOpNodeProperties);
 static DeferredErrorMessage * DeferErrorIfContainsNonPushdownableAggregate(
 	MultiNode *logicalPlanNode);
 static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
@@ -1511,10 +1512,19 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 
 	if (IsA(originalNode, Aggref))
 	{
-		Aggref *originalAggregate = (Aggref *) originalNode;
-		Expr *newExpression = MasterAggregateExpression(originalAggregate, walkerContext);
+		if (CanPushDownExpression(originalNode,
+								  walkerContext->extendedOpNodeProperties))
+		{
+			return originalNode;
+		}
+		else
+		{
+			Aggref *originalAggregate = (Aggref *) originalNode;
+			Expr *newExpression = MasterAggregateExpression(originalAggregate,
+															walkerContext);
 
-		newNode = (Node *) newExpression;
+			newNode = (Node *) newExpression;
+		}
 	}
 	else if (IsA(originalNode, Var))
 	{
@@ -2184,13 +2194,13 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	queryTargetList.targetProjectionNumber = 1;
 
 	/* only push down grouping to worker query when pushing down aggregates */
-	if (extendedOpNodeProperties->pullUpIntermediateRows)
+	if (CanPushDownGroupingAndHaving(extendedOpNodeProperties))
 	{
-		queryGroupClause.groupClauseList = NIL;
+		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
 	}
 	else
 	{
-		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
+		queryGroupClause.groupClauseList = NIL;
 	}
 
 	/*
@@ -2870,12 +2880,20 @@ WorkerAggregateWalker(Node *node, WorkerAggregateWalkerContext *walkerContext)
 
 	if (IsA(node, Aggref))
 	{
-		Aggref *originalAggregate = (Aggref *) node;
-		List *workerAggregateList = WorkerAggregateExpressionList(originalAggregate,
-																  walkerContext);
+		if (CanPushDownExpression(node, walkerContext->extendedOpNodeProperties))
+		{
+			walkerContext->expressionList = lappend(walkerContext->expressionList,
+													node);
+		}
+		else
+		{
+			Aggref *originalAggregate = (Aggref *) node;
+			List *workerAggregateList = WorkerAggregateExpressionList(originalAggregate,
+																	  walkerContext);
 
-		walkerContext->expressionList = list_concat(walkerContext->expressionList,
-													workerAggregateList);
+			walkerContext->expressionList = list_concat(walkerContext->expressionList,
+														workerAggregateList);
+		}
 	}
 	else if (IsA(node, Var))
 	{
@@ -3531,7 +3549,7 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
  */
 static bool
 CanPushDownExpression(Node *expression,
-					  ExtendedOpNodeProperties *extendedOpNodeProperties)
+					  const ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
 	bool hasAggregate = contain_aggs_of_level(expression, 0);
 	bool hasWindowFunction = contain_window_function(expression);
@@ -3564,7 +3582,7 @@ CanPushDownExpression(Node *expression,
  * pushed down to worker.
  */
 static bool
-CanPushDownGroupingAndHaving(ExtendedOpNodeProperties *extendedOpNodeProperties)
+CanPushDownGroupingAndHaving(const ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
 	return extendedOpNodeProperties->groupedByDisjointPartitionColumn ||
 		   (extendedOpNodeProperties->hasWindowFuncs &&
