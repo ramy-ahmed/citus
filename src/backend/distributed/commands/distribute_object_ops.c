@@ -101,7 +101,7 @@ static DistributeObjectOps Any_AlterRole = {
 };
 static DistributeObjectOps Any_AlterRoleSet = {
 	.deparse = DeparseAlterRoleSetStmt,
-	.qualify = NULL,
+	.qualify = QualifyAlterRoleSetStmt,
 	.preprocess = PreprocessAlterRoleSetStmt,
 	.postprocess = NULL,
 	.address = NULL,

@@ -39,7 +39,6 @@
 #include "utils/syscache.h"
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
-static void ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
 static DefElem * makeDefElemInt(char *name, int value);
@@ -52,7 +51,6 @@ static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
-static Node * MakeSetStatementArgument(char *configurationValue);
 static void ParseConfigOption(const char *string, char **name, char **value);
 
 /* controlled via GUC */
@@ -122,7 +120,6 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
-	ErrorIfUnsupportedAlterRoleSetStmt(stmt);
 
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -132,30 +129,6 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 								   ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commandList);
-}
-
-
-/*
- * ErrorIfUnsupportedAlterRoleSetStmt raises an error if the AlterRoleSetStmt contains a
- * construct that is not supported.
- *
- * Unsupported Constructs:
- *  - ALTER ROLE ... SET ... FROM CURRENT
- */
-static void
-ErrorIfUnsupportedAlterRoleSetStmt(AlterRoleSetStmt *stmt)
-{
-	VariableSetStmt *setStmt = stmt->setstmt;
-
-	if (setStmt->kind == VAR_SET_CURRENT)
-	{
-		/* check if the set action is a SET ... FROM CURRENT */
-		ereport(NOTICE, (errmsg("not propagating ALTER ROLE .. SET .. FROM"
-								" CURRENT command to worker nodes"),
-						 errhint("SET FROM CURRENT is not supported for "
-								 "distributed users, instead use the SET ... "
-								 "TO ... syntax with a constant value.")));
-	}
 }
 
 
@@ -613,7 +586,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
  *
  * The allowed A_Const types are Integer, Float, and String.
  */
-static Node *
+Node *
 MakeSetStatementArgument(char *configurationValue)
 {
 	volatile Node *arg = NULL;

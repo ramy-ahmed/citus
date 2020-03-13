@@ -280,6 +280,19 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 ALTER ROLE alter_role_1 IN DATABASE regression RESET ALL;
 ALTER ROLE alter_role_1 RESET ALL;
 ALTER ROLE ALL RESET ALL;
+-- FROM CURRENT clauses
+SET statement_timeout TO '1min';
+ALTER ROLE alter_role_1 SET statement_timeout FROM CURRENT;
+SET ROLE alter_role_1;
+SELECT run_command_on_workers('SHOW statement_timeout');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1min)
+ (localhost,57638,t,1min)
+(2 rows)
+
+RESET statement_timeout;
+RESET ROLE;
 -- the session defaults should be updated on master_add_node
 SELECT master_remove_node('localhost', :worker_1_port);
  master_remove_node

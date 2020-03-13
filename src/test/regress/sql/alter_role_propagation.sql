@@ -105,6 +105,16 @@ ALTER ROLE alter_role_1 IN DATABASE regression RESET ALL;
 ALTER ROLE alter_role_1 RESET ALL;
 ALTER ROLE ALL RESET ALL;
 
+-- FROM CURRENT clauses
+SET statement_timeout TO '1min';
+ALTER ROLE alter_role_1 SET statement_timeout FROM CURRENT;
+
+SET ROLE alter_role_1;
+SELECT run_command_on_workers('SHOW statement_timeout');
+
+RESET statement_timeout;
+RESET ROLE;
+
 -- the session defaults should be updated on master_add_node
 SELECT master_remove_node('localhost', :worker_1_port);
 ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
