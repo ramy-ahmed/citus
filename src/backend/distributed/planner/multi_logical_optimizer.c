@@ -290,9 +290,6 @@ static Const * MakeIntegerConstInt64(int64 integerValue);
 static bool RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
 								  const ExtendedOpNodeProperties *extendedOpNodeProperties);
-static bool CanPushDownGroupingAndHaving(const
-										 ExtendedOpNodeProperties *
-										 extendedOpNodeProperties);
 static DeferredErrorMessage * DeferErrorIfContainsNonPushdownableAggregate(
 	MultiNode *logicalPlanNode);
 static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
@@ -1446,7 +1443,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
 	}
 
-	if (!CanPushDownGroupingAndHaving(extendedOpNodeProperties))
+	if (!extendedOpNodeProperties->pushDownGroupingAndHaving)
 	{
 		/*
 		 * Not pushing down GROUP BY, need to regroup on coordinator
@@ -1480,7 +1477,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->havingQual = newHavingQual;
 
 	if (extendedOpNodeProperties->hasNonPushableWindowFunction &&
-		!CanPushDownGroupingAndHaving(extendedOpNodeProperties))
+		!extendedOpNodeProperties->pushDownGroupingAndHaving)
 	{
 		masterExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
 		masterExtendedOpNode->windowClause = originalOpNode->windowClause;
@@ -2211,7 +2208,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 * only push down grouping to worker query when pushing down aggregates,
 	 * or when grouping can be done entirely on worker.
 	 */
-	if (CanPushDownGroupingAndHaving(extendedOpNodeProperties) ||
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving ||
 		(!extendedOpNodeProperties->pullUpIntermediateRows &&
 		 (contain_aggs_of_level(originalHavingQual, 0) ||
 		  contain_aggs_of_level((Node *) originalTargetEntryList, 0))))
@@ -2255,7 +2252,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	if (!extendedOpNodeProperties->hasNonPushableWindowFunction &&
 		!extendedOpNodeProperties->pullUpIntermediateRows &&
-		(CanPushDownGroupingAndHaving(extendedOpNodeProperties) ||
+		(extendedOpNodeProperties->pushDownGroupingAndHaving ||
 		 (pushingDownOriginalGrouping && originalHavingQual == NULL)
 		))
 	{
@@ -2409,7 +2406,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		return;
 	}
 
-	if (CanPushDownGroupingAndHaving(extendedOpNodeProperties))
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
 	{
 		/*
 		 * We converted the having expression to a list in subquery pushdown
@@ -3578,7 +3575,7 @@ CanPushDownExpression(Node *expression,
 		return true;
 	}
 
-	if (CanPushDownGroupingAndHaving(extendedOpNodeProperties))
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
 	{
 		return true;
 	}
@@ -3590,40 +3587,6 @@ CanPushDownExpression(Node *expression,
 	}
 
 	return false;
-}
-
-
-/*
- * CanPushDownGroupingAndHaving returns whether GROUP BY & HAVING should be
- * pushed down to worker.
- */
-static bool
-CanPushDownGroupingAndHaving(const ExtendedOpNodeProperties *extendedOpNodeProperties)
-{
-	/* don't push down if we're pulling up */
-	if (extendedOpNodeProperties->pullUpIntermediateRows)
-	{
-		return false;
-	}
-
-	/*
-	 * If grouped by a partition column whose values are shards have disjoint sets
-	 * of partition values, we can push down the having qualifier.
-	 */
-	if (extendedOpNodeProperties->groupedByDisjointPartitionColumn)
-	{
-		return true;
-	}
-
-	/*
-	 * When a query with subquery is provided, we can't determine if
-	 * groupedByDisjointPartitionColumn, therefore we also check if there is a
-	 * window function too. If there is a window function we would know that it
-	 * is safe to push down (i.e. it is partitioned on distribution column, and
-	 * if there is a group by, it contains distribution column).
-	 */
-	return extendedOpNodeProperties->hasWindowFuncs &&
-		   !extendedOpNodeProperties->hasNonPushableWindowFunction;
 }
 
 

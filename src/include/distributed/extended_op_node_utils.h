@@ -30,6 +30,7 @@ typedef struct ExtendedOpNodeProperties
 	bool hasWindowFuncs;
 	bool hasNonPushableWindowFunction;
 	bool pullUpIntermediateRows;
+	bool pushDownGroupingAndHaving;
 } ExtendedOpNodeProperties;
 
 
