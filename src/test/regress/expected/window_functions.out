@@ -1010,11 +1010,9 @@ $Q$);
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.avg_1 DESC, remote_scan.avg DESC, remote_scan.user_id DESC
-   ->  HashAggregate
-         Group Key: remote_scan.user_id
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-(6 rows)
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(4 rows)
 
 SELECT
 	value_2,
@@ -1262,24 +1260,22 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
-                                                         QUERY PLAN
+                                                      QUERY PLAN
 ---------------------------------------------------------------------
  Sort
-   Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.worker_column_5
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(15 rows)
+   Sort Key: remote_scan.user_id, remote_scan.avg DESC
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  WindowAgg
+                     ->  Sort
+                           Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                           ->  HashAggregate
+                                 Group Key: users_table.user_id, users_table.value_2
+                                 ->  Seq Scan on users_table_1400256 users_table
+(13 rows)
 
 -- order by in the window function is same as avg(value_1) DESC
 SELECT
@@ -1337,25 +1333,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                            QUERY PLAN
+                                                         QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1367,25 +1361,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                            QUERY PLAN
+                                                         QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1397,25 +1389,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                     QUERY PLAN
+                                              QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1427,25 +1417,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                     QUERY PLAN
+                                        QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (sum(users_table.value_2))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (sum(users_table.value_2))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 -- Window function with inlined CTE
 WITH cte as (
