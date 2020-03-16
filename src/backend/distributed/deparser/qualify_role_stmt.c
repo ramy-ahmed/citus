@@ -54,11 +54,12 @@ QualifyAlterRoleSetStmt(Node *node)
 static void
 QualifyVarSetCurrent(VariableSetStmt *setStmt)
 {
-	text *nameText = cstring_to_text(setStmt->name);
+	char *configurationName = setStmt->name;
+	text *nameText = cstring_to_text(configurationName);
 	Datum nameDatum = PointerGetDatum(nameText);
 	Datum configValueDatum = DirectFunctionCall1(show_config_by_name, nameDatum);
 	char *configValue = TextDatumGetCString(configValueDatum);
 
 	setStmt->kind = VAR_SET_VALUE;
-	setStmt->args = list_make1(MakeSetStatementArgument(configValue));
+	setStmt->args = list_make1(MakeSetStatementArgument(configurationName, configValue));
 }

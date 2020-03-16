@@ -35,6 +35,8 @@
 #include "nodes/pg_list.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/guc_tables.h"
+#include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -55,6 +57,23 @@ static void ParseConfigOption(const char *string, char **name, char **value);
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
+
+/*
+ * copied from utils/misc/help_config.c
+ *
+ * This union allows us to mix the numerous different types of structs
+ * for different GUC variables.
+ */
+typedef union
+{
+	struct config_generic generic;
+	struct config_bool _bool;
+	struct config_real real;
+	struct config_int integer;
+	struct config_string string;
+	struct config_enum _enum;
+} mixedStruct;
+
 
 /*
  * PostprocessAlterRoleStmt actually creates the plan we need to execute for alter
@@ -319,7 +338,7 @@ MakeVariableSetStmt(const char *config)
 	VariableSetStmt *variableSetStmt = makeNode(VariableSetStmt);
 	variableSetStmt->kind = VAR_SET_VALUE;
 	variableSetStmt->name = name;
-	variableSetStmt->args = list_make1(MakeSetStatementArgument(value));
+	variableSetStmt->args = list_make1(MakeSetStatementArgument(name, value));
 
 	return variableSetStmt;
 }
@@ -587,71 +606,70 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
  * The allowed A_Const types are Integer, Float, and String.
  */
 Node *
-MakeSetStatementArgument(char *configurationValue)
+MakeSetStatementArgument(char *configurationName, char *configurationValue)
 {
-	volatile Node *arg = NULL;
-	MemoryContext savedContext = CurrentMemoryContext;
+	mixedStruct *config = NULL;
+	Node *arg = NULL;
+	struct config_generic **guc_vars = get_guc_variables();
+	int numOpts = GetNumConfigOptions();
 
-	/*
-	 * Try to parse the configuration value as an integer, and swallow all
-	 * errors.
-	 */
-	PG_TRY();
+	int i;
+	for (i = 0; i < numOpts; i++)
 	{
-		long longValue = SafeStringToInt64(configurationValue);
-		arg = makeIntConst(longValue, -1);
-	}
-	PG_CATCH();
-	{
-		arg = NULL;
-		MemoryContextSwitchTo(savedContext);
-		ErrorData *edata = CopyErrorData();
-		FlushErrorState();
+		mixedStruct *var = (mixedStruct *) guc_vars[i];
 
-		/* don't try to intercept PANIC or FATAL, let those breeze past us */
-		if (edata->elevel != ERROR)
+		if (pg_strcasecmp(configurationName, var->generic.name) == 0)
 		{
-			PG_RE_THROW();
+			config = var;
 		}
 	}
-	PG_END_TRY();
 
-	if (arg != NULL)
+	/* If the config is not user-defined, lookup the variable type to contruct the arguments */
+	if (config != NULL)
 	{
-		return (Node *) arg;
-	}
-
-	/*
-	 * Try to parse the configuration value as a float, and swallow all
-	 * errors.
-	 */
-	PG_TRY();
-	{
-		SafeStringToFloat(configurationValue);
-		arg = makeFloatConst(configurationValue, -1);
-	}
-	PG_CATCH();
-	{
-		arg = NULL;
-		MemoryContextSwitchTo(savedContext);
-		ErrorData *edata = CopyErrorData();
-		FlushErrorState();
-
-		/* don't try to intercept PANIC or FATAL, let those breeze past us */
-		if (edata->elevel != ERROR)
+		switch (config->generic.vartype)
 		{
-			PG_RE_THROW();
+			/* We use postgresql parser so that we will parse the units only if
+			 * the configuration paramater allows it.
+			 *
+			 * e.g. `SET statement_timeout = '1min'` will be parsed as 60000 since
+			 * the value is stored in units of ms internally.
+			 */
+			case PGC_INT:
+			{
+				int intValue;
+				parse_int(configurationValue, &intValue, config->integer.gen.flags, NULL);
+				arg = makeIntConst(intValue, -1);
+				break;
+			}
+
+			case PGC_REAL:
+			{
+				arg = makeFloatConst(configurationValue, -1);
+				break;
+			}
+
+			case PGC_BOOL:
+			case PGC_STRING:
+			case PGC_ENUM:
+			{
+				arg = makeStringConst(configurationValue, -1);
+				break;
+			}
+
+			default:
+			{
+				ereport(ERROR, (errmsg("Unrecognized run-time parameter type for %s",
+									   configurationName)));
+				break;
+			}
 		}
 	}
-	PG_END_TRY();
-
-	if (arg != NULL)
+	else
 	{
-		return (Node *) arg;
+		arg = makeStringConst(configurationValue, -1);
 	}
-
-	/* create a string constant as we exhausted all our previous options */
-	return makeStringConst(configurationValue, -1);
+	return (Node *) arg;
 }
 
 
