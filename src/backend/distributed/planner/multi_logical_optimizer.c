@@ -2207,10 +2207,16 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	/*
 	 * only push down grouping to worker query when pushing down aggregates,
 	 * or when grouping can be done entirely on worker.
+	 * Also duplicate grouping if we have LIMIT without HAVING, as this can
+	 * often result in LIMIT being pushed down.
 	 */
+	bool mightHavePushableLimit = originalHavingQual == NULL &&
+								  originalOpNode->limitCount;
+
 	if (extendedOpNodeProperties->pushDownGroupingAndHaving ||
 		(!extendedOpNodeProperties->pullUpIntermediateRows &&
-		 (contain_aggs_of_level(originalHavingQual, 0) ||
+		 (mightHavePushableLimit ||
+		  contain_aggs_of_level(originalHavingQual, 0) ||
 		  contain_aggs_of_level((Node *) originalTargetEntryList, 0))))
 	{
 		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
