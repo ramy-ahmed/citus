@@ -380,5 +380,3 @@ DETAIL:  Citus does not propagate ALTER ROLE ... RENAME TO commands to workers
 HINT:  You can manually alter roles on workers.
 SET citus.enable_alter_role_propagation to OFF;
 DROP SCHEMA alter_role CASCADE;
-ALTER ROLE alter_role_1;
-ERROR:  role "alter_role_1" does not exist

@@ -145,4 +145,3 @@ ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
 SET citus.enable_alter_role_propagation to OFF;
 
 DROP SCHEMA alter_role CASCADE;
-ALTER ROLE alter_role_1;
