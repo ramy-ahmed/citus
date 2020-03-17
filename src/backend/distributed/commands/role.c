@@ -578,9 +578,10 @@ MakeSetStatementArgument(char *configurationName, char *configurationValue)
 	struct config_generic **gucVariables = get_guc_variables();
 	int numOpts = GetNumConfigOptions();
 	struct config_generic **matchingConfig =
-		(struct config_generic **) bsearch((void *) &key, (void *) gucVariables, numOpts,
-										   sizeof(struct config_generic *),
-										   ConfigGenericNameCompare);
+		(struct config_generic **) SafeBsearch((void *) &key, (void *) gucVariables,
+											   numOpts,
+											   sizeof(struct config_generic *),
+											   ConfigGenericNameCompare);
 
 	/* If the config is not user-defined, lookup the variable type to contruct the arguments */
 	if (*matchingConfig != NULL)
