@@ -45,34 +45,20 @@ static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
 static DefElem * makeDefElemInt(char *name, int value);
 
-char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription);
-char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
-										TupleDesc DbRoleSettingDescription);
+static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc
+										   DbRoleSettingDescription);
+static char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
+											   TupleDesc DbRoleSettingDescription);
 static Node * makeStringConst(char *str, int location);
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static void ParseConfigOption(const char *string, char **name, char **value);
+static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
-
-/*
- * copied from utils/misc/help_config.c
- *
- * This union allows us to mix the numerous different types of structs
- * for different GUC variables.
- */
-typedef union
-{
-	struct config_generic generic;
-	struct config_bool _bool;
-	struct config_real real;
-	struct config_int integer;
-	struct config_string string;
-	struct config_enum _enum;
-} mixedStruct;
 
 
 /*
@@ -555,7 +541,7 @@ makeDefElemInt(char *name, int value)
  * GetDatabaseNameFromDbRoleSetting performs a lookup, and finds the database name
  * associated with a Role Setting
  */
-char *
+static char *
 GetDatabaseNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription)
 {
 	bool isnull;
@@ -579,7 +565,7 @@ GetDatabaseNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescrip
  * GetDatabaseNameFromDbRoleSetting performs a lookup, and finds the role name
  * associated with a Role Setting
  */
-char *
+static char *
 GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription)
 {
 	bool isnull;
@@ -608,26 +594,19 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 Node *
 MakeSetStatementArgument(char *configurationName, char *configurationValue)
 {
-	mixedStruct *config = NULL;
 	Node *arg = NULL;
-	struct config_generic **guc_vars = get_guc_variables();
+	char **key = &configurationName;
+	struct config_generic **gucVariables = get_guc_variables();
 	int numOpts = GetNumConfigOptions();
-
-	int i;
-	for (i = 0; i < numOpts; i++)
-	{
-		mixedStruct *var = (mixedStruct *) guc_vars[i];
-
-		if (pg_strcasecmp(configurationName, var->generic.name) == 0)
-		{
-			config = var;
-		}
-	}
+	struct config_generic **matchingConfig =
+		(struct config_generic **) bsearch((void *) &key, (void *) gucVariables, numOpts,
+										   sizeof(struct config_generic *),
+										   ConfigGenericNameCompare);
 
 	/* If the config is not user-defined, lookup the variable type to contruct the arguments */
-	if (config != NULL)
+	if (*matchingConfig != NULL)
 	{
-		switch (config->generic.vartype)
+		switch ((*matchingConfig)->vartype)
 		{
 			/* We use postgresql parser so that we will parse the units only if
 			 * the configuration paramater allows it.
@@ -638,7 +617,8 @@ MakeSetStatementArgument(char *configurationName, char *configurationValue)
 			case PGC_INT:
 			{
 				int intValue;
-				parse_int(configurationValue, &intValue, config->integer.gen.flags, NULL);
+				parse_int(configurationValue, &intValue,
+						  (*matchingConfig)->flags, NULL);
 				arg = makeIntConst(intValue, -1);
 				break;
 			}
@@ -724,4 +704,20 @@ makeFloatConst(char *str, int location)
 	n->location = location;
 
 	return (Node *) n;
+}
+
+
+/*
+ * ConfigGenericNameCompare compares two config_generic structs based on their
+ * name fields. If the name fields contain the same strings two structs are
+ * considered to be equal.
+ *
+ * copied from guc_var_compare in utils/misc/guc.c
+ */
+static int
+ConfigGenericNameCompare(const void *a, const void *b)
+{
+	const struct config_generic *confa = *(struct config_generic *const *) a;
+	const struct config_generic *confb = *(struct config_generic *const *) b;
+	return pg_strcasecmp(confa->name, confb->name);
 }
