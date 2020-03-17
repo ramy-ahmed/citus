@@ -43,6 +43,8 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
+static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
+											   DbRoleSettingDescription);
 static DefElem * makeDefElemInt(char *name, int value);
 
 static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc
@@ -236,27 +238,11 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 										DbRoleSettingDescription)
 {
 	AlterRoleSetStmt *stmt = makeNode(AlterRoleSetStmt);
-	const char *currentDatabaseName = CurrentDatabaseName();
 	List *commandList = NIL;
 	bool isnull = false;
 
 	const char *databaseName =
 		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-
-	/*
-	 * session defaults for databases other than the current one are skipped
-	 */
-	if (databaseName != NULL &&
-		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
-	{
-		ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE .. IN DATABASE"
-								" .. SET  for distributed databases"),
-						 errdetail("Citus propagates the session defaults that affect "
-								   "current database"),
-						 errhint("You can manually change attributes of roles "
-								 "on workers")));
-		return NULL;
-	}
 
 	if (databaseName != NULL)
 	{
@@ -264,15 +250,6 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
 	}
 
 	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-
-	/*
-	 * default roles are skipped, because reserved roles
-	 * cannot be altered.
-	 */
-	if (roleName != NULL && IsReservedName(roleName))
-	{
-		return NULL;
-	}
 
 	if (roleName != NULL)
 	{
@@ -514,10 +491,12 @@ GenerateAlterRoleSetIfExistsCommandAllRoles()
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
-		alterRoleSetQueries =
-			GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
-
-		commands = list_concat(commands, (void *) alterRoleSetQueries);
+		if (ShouldPropagateAlterRoleSetQueries(tuple, DbRoleSettingDescription))
+		{
+			alterRoleSetQueries =
+				GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
+			commands = list_concat(commands, (void *) alterRoleSetQueries);
+		}
 	}
 
 	heap_endscan(scan);
@@ -720,4 +699,50 @@ ConfigGenericNameCompare(const void *a, const void *b)
 	const struct config_generic *confa = *(struct config_generic *const *) a;
 	const struct config_generic *confb = *(struct config_generic *const *) b;
 	return pg_strcasecmp(confa->name, confb->name);
+}
+
+
+/*
+ * ShouldPropagateAlterRoleSetQueries decides if an AlterRoleSetStmt should be
+ * propagated to worker nodes;
+ */
+static bool
+ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
+								   DbRoleSettingDescription)
+{
+	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	const char *currentDatabaseName = CurrentDatabaseName();
+	const char *databaseName =
+		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
+	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
+
+	/*
+	 * session defaults for databases other than the current one are not propagated
+	 */
+	if (databaseName != NULL &&
+		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
+	{
+		ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE .. IN DATABASE"
+								" .. SET  for distributed databases"),
+						 errdetail("Citus propagates the session defaults that affect "
+								   "current database"),
+						 errhint("You can manually change attributes of roles "
+								 "on workers")));
+		return false;
+	}
+
+	/*
+	 * default roles are skipped, because reserved roles
+	 * cannot be altered.
+	 */
+	if (roleName != NULL && IsReservedName(roleName))
+	{
+		return false;
+	}
+
+	return true;
 }
