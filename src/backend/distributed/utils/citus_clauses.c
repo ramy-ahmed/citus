@@ -27,7 +27,7 @@
 
 
 /* private function declarations */
-static bool IsVarNode(Node *node);
+static bool CannotCitusEvaluate(Node *node);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 								  Oid result_collation,
 								  MasterEvaluationContext *masterEvaluationContext);
@@ -120,7 +120,7 @@ PartiallyEvaluateExpression(Node *expression,
 	else if (ShouldEvaluateExpressionType(nodeTag) &&
 			 ShouldEvaluateFunctionWithMasterContext(masterEvaluationContext))
 	{
-		if (FindNodeCheck(expression, IsVarNode))
+		if (FindNodeCheck(expression, CannotCitusEvaluate))
 		{
 			return (Node *) expression_tree_mutator(expression,
 													PartiallyEvaluateExpression,
@@ -200,11 +200,17 @@ ShouldEvaluateExpressionType(NodeTag nodeTag)
 
 
 /*
- * IsVarNode returns whether a node is a Var (column reference).
+ * CannotCitusEvaluate returns whether citus_evaluate_expr cannot evaluate node.
  */
 static bool
-IsVarNode(Node *node)
+CannotCitusEvaluate(Node *node)
 {
+	if (IsA(node, Param))
+	{
+		/* ExecInitExpr cannot handle PARAM_SUBLINK */
+		return ((Param *) node)->paramkind == PARAM_SUBLINK;
+	}
+
 	return IsA(node, Var);
 }
 
