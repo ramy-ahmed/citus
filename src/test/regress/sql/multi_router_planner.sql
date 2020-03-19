@@ -1038,7 +1038,8 @@ SELECT count(*), count(*) FILTER (WHERE id < 3)
 PREPARE author_1_articles as
 	SELECT *
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 EXECUTE author_1_articles;
 
@@ -1046,7 +1047,8 @@ EXECUTE author_1_articles;
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
-	WHERE author_id = $1;
+	WHERE author_id = $1
+	ORDER BY 1;
 
 EXECUTE author_articles(1);
 
@@ -1076,7 +1078,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT * FROM author_articles_id_word_count();
+SELECT * FROM author_articles_id_word_count() ORDER BY 1;
 
 -- materialized views can be created for router plannable queries
 CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
@@ -1091,7 +1093,8 @@ SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 -- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
@@ -1099,7 +1102,8 @@ INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amate
 -- verify insert is successful (not router plannable and executable)
 SELECT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 -- https://github.com/citusdata/citus/issues/3624
 UPDATE articles_hash SET id = id
