@@ -147,7 +147,7 @@ static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planning
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
-static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
+static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(void);
@@ -1809,7 +1809,43 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList, uint64 shardId,
 						  bool parametersInQueryResolved)
 {
-	Task *task = CreateTask(SELECT_TASK);
+	TaskType taskType = SELECT_TASK;
+	char replicationModel = 0;
+
+	CommonTableExpr *cte = NULL;
+	foreach_ptr(cte, query->cteList)
+	{
+		Query *cteQuery = (Query *) cte->ctequery;
+
+		if (cteQuery->commandType != CMD_SELECT)
+		{
+			/* These test could be asserts */
+			RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(cteQuery);
+			CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
+				updateOrDeleteRTE->relid);
+			char modificationPartitionMethod =
+				modificationTableCacheEntry->partitionMethod;
+
+			if (modificationPartitionMethod == DISTRIBUTE_BY_NONE)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot perform select on a distributed table "
+									   "and modify a reference table")));
+			}
+
+			if (replicationModel &&
+				modificationTableCacheEntry->replicationModel != replicationModel)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot route mixed replication models")));
+			}
+
+			taskType = MODIFY_TASK;
+			replicationModel = modificationTableCacheEntry->replicationModel;
+		}
+	}
+
+	Task *task = CreateTask(taskType);
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
@@ -1825,6 +1861,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
+	task->replicationModel = replicationModel;
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
 	return list_make1(task);
@@ -1900,11 +1937,15 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 							   "and modify a reference table")));
 	}
 
+	List *relationRowLockList = NIL;
+	RowLocksOnRelations((Node *) query, &relationRowLockList);
+
 	task->taskPlacementList = placementList;
 	SetTaskQuery(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
+	task->relationRowLockList = relationRowLockList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
@@ -3118,7 +3159,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 /*
  * MultiRouterPlannableQuery checks if given select query is router plannable,
  * setting distributedPlan->planningError if not.
- * The query is router plannable if it is a modify query, or if its is a select
+ * The query is router plannable if it is a modify query, or if it is a select
  * query issued on a hash partitioned distributed table. Router plannable checks
  * for select queries can be turned off by setting citus.enable_router_execution
  * flag to false.
@@ -3187,7 +3228,7 @@ MultiRouterPlannableQuery(Query *query)
 		}
 	}
 
-	return ErrorIfQueryHasModifyingCTE(query);
+	return ErrorIfQueryHasUnroutableModifyingCTE(query);
 }
 
 
@@ -3248,19 +3289,20 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 
 /*
- * ErrorIfQueryHasModifyingCTE checks if the query contains modifying common table
+ * ErrorIfQueryHasUnroutableModifyingCTE checks if the query contains modifying common table
  * expressions and errors out if it does.
  */
 static DeferredErrorMessage *
-ErrorIfQueryHasModifyingCTE(Query *queryTree)
+ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 {
-	ListCell *cteCell = NULL;
-
 	Assert(queryTree->commandType == CMD_SELECT);
 
-	foreach(cteCell, queryTree->cteList)
+	/* we can't route conflicting replication models */
+	char replicationModel = 0;
+
+	CommonTableExpr *cte = NULL;
+	foreach_ptr(cte, queryTree->cteList)
 	{
-		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
 		Query *cteQuery = (Query *) cte->ctequery;
 
 		/*
@@ -3269,12 +3311,40 @@ ErrorIfQueryHasModifyingCTE(Query *queryTree)
 		 * be at top level of CTE. Therefore it is OK to just check for top level.
 		 * Similarly, we do not need to check for subqueries.
 		 */
-		if (cteQuery->commandType != CMD_SELECT)
+		if (cteQuery->commandType != CMD_SELECT &&
+			cteQuery->commandType != CMD_UPDATE &&
+			cteQuery->commandType != CMD_DELETE)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "data-modifying statements are not supported in "
-								 "the WITH clauses of distributed queries",
+								 "only SELECT, UPDATE, or DELETE common table expressions "
+								 "may be router planned",
 								 NULL, NULL);
+		}
+
+		if (cteQuery->commandType != CMD_SELECT)
+		{
+			RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(cteQuery);
+			CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
+				updateOrDeleteRTE->relid);
+			char modificationPartitionMethod =
+				modificationTableCacheEntry->partitionMethod;
+
+			if (modificationPartitionMethod == DISTRIBUTE_BY_NONE)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot router plan modification of a reference table",
+									 NULL, NULL);
+			}
+
+			if (replicationModel &&
+				modificationTableCacheEntry->replicationModel != replicationModel)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot route mixed replication models",
+									 NULL, NULL);
+			}
+
+			replicationModel = modificationTableCacheEntry->replicationModel;
 		}
 	}
 
