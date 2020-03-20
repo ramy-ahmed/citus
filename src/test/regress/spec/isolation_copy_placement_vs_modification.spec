@@ -120,7 +120,9 @@ step "s2-repair-placement"
 
 step "s2-copy-placement"
 {
-	SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+	SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+									   'localhost', 57637, 'localhost', 57638,
+									   do_repair := false, transfer_mode := 'block_writes');
 }
 
 step "s2-commit"

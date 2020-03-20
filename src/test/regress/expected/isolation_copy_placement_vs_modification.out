@@ -549,7 +549,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -577,7 +579,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -605,7 +609,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -633,7 +639,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -661,7 +669,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -689,7 +699,9 @@ step s2-begin:
  BEGIN;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
@@ -722,7 +734,9 @@ step s1-update-copy-table:
  UPDATE test_copy_placement_vs_modification SET y = 5 WHERE x = 5;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
  <waiting ...>
 step s1-commit:
  COMMIT;
@@ -750,7 +764,9 @@ step s1-delete-copy-table:
  DELETE FROM test_copy_placement_vs_modification WHERE x = 5;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
  <waiting ...>
 step s1-commit:
  COMMIT;
@@ -778,7 +794,9 @@ step s1-insert-copy-table:
  INSERT INTO test_copy_placement_vs_modification VALUES (5, 10);
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
  <waiting ...>
 step s1-commit:
  COMMIT;
@@ -806,7 +824,9 @@ step s1-copy-copy-table:
  COPY test_copy_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
  <waiting ...>
 step s1-commit:
  COMMIT;
@@ -834,7 +854,9 @@ step s1-ddl-copy-table:
  CREATE INDEX test_copy_placement_vs_modification_index ON test_copy_placement_vs_modification(x);
 
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
  <waiting ...>
 step s1-commit:
  COMMIT;
@@ -865,7 +887,9 @@ count
 
 0
 step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)), 'localhost', 57637, 'localhost', 57638, do_repair := false);
+ SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
+            'localhost', 57637, 'localhost', 57638,
+            do_repair := false, transfer_mode := 'block_writes');
 
 master_copy_shard_placement
 
