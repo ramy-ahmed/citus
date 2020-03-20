@@ -1806,7 +1806,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 					List *placementList, uint64 shardId,
 					bool parametersInQueryResolved)
 {
-	TaskType taskType = SELECT_TASK;
+	TaskType taskType = READ_TASK;
 	char replicationModel = 0;
 
 	if (query->commandType != CMD_SELECT)

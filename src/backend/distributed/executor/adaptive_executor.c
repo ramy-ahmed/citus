@@ -1392,16 +1392,11 @@ ReadOnlyTask(TaskType taskType)
 {
 	switch (taskType)
 	{
-		case SELECT_TASK:
+		case READ_TASK:
 		case MAP_OUTPUT_FETCH_TASK:
 		case MAP_TASK:
 		case MERGE_TASK:
 		{
-			/*
-			 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
-			 * When we implement it, we should either not use the mentioned task types for
-			 * modifying CTEs detect them here.
-			 */
 			return true;
 		}
 
@@ -1846,7 +1841,7 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 {
 	switch (task->taskType)
 	{
-		case SELECT_TASK:
+		case READ_TASK:
 		{
 			return EXECUTION_ORDER_ANY;
 		}
