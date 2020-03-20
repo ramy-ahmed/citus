@@ -159,6 +159,7 @@ typedef enum LimitPushdownable
 typedef struct OrderByLimitReference
 {
 	bool groupedByDisjointPartitionColumn;
+	bool hasNonPushableWindowFunction;
 	bool groupClauseIsEmpty;
 	bool sortClauseIsEmpty;
 	bool hasOrderByAggregate;
@@ -252,6 +253,7 @@ static void ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimit
 											  QueryTargetList *queryTargetList);
 static OrderByLimitReference BuildOrderByLimitReference(bool hasDistinctOn, bool
 														groupedByDisjointPartitionColumn,
+														bool hasNonPushableWindowFunction,
 														List *groupClause,
 														List *sortClauseList,
 														List *targetList);
@@ -2016,7 +2018,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Oid masterReturnType = get_func_rettype(aggregateFunctionId);
 
 		/*
-		 * If return type aggregate is anyelement, it's actual return type is
+		 * If return type aggregate is anyelement, its actual return type is
 		 * determined on the type of its argument. So we replace it with the
 		 * argument type in that case.
 		 */
@@ -2169,8 +2171,6 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 					 ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
 	bool distinctPreventsLimitPushdown = false;
-	bool groupedByDisjointPartitionColumn =
-		extendedOpNodeProperties->groupedByDisjointPartitionColumn;
 
 	QueryTargetList queryTargetList;
 	QueryGroupClause queryGroupClause;
@@ -2286,7 +2286,10 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 			/* both sort and limit clauses rely on similar information */
 			OrderByLimitReference limitOrderByReference =
 				BuildOrderByLimitReference(hasDistinctOn,
+										   extendedOpNodeProperties->
 										   groupedByDisjointPartitionColumn,
+										   extendedOpNodeProperties->
+										   hasNonPushableWindowFunction,
 										   originalGroupClauseList,
 										   originalSortClauseList,
 										   originalTargetEntryList);
@@ -2672,12 +2675,15 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
  */
 static OrderByLimitReference
 BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionColumn,
+						   bool hasNonPushableWindowFunction,
 						   List *groupClause, List *sortClauseList, List *targetList)
 {
 	OrderByLimitReference limitOrderByReference;
 
 	limitOrderByReference.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
+	limitOrderByReference.hasNonPushableWindowFunction =
+		hasNonPushableWindowFunction;
 	limitOrderByReference.hasDistinctOn = hasDistinctOn;
 	limitOrderByReference.groupClauseIsEmpty = (groupClause == NIL);
 	limitOrderByReference.sortClauseIsEmpty = (sortClauseList == NIL);
@@ -4309,13 +4315,18 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	Assert(limitOffset == NULL || IsA(limitOffset, Const));
 
 	/*
+	 * If windown functions are computed on coordinator, we cannot push down LIMIT.
 	 * If we don't have group by clauses, or we have group by partition column,
 	 * or if we have order by clauses without aggregates, we can push down the
 	 * original limit. Else if we have order by clauses with commutative aggregates,
 	 * we can push down approximate limits.
 	 */
-	if (orderByLimitReference.groupClauseIsEmpty ||
-		orderByLimitReference.groupedByDisjointPartitionColumn)
+	if (orderByLimitReference.hasNonPushableWindowFunction)
+	{
+		canPushDownLimit = LIMIT_CANNOT_PUSHDOWN;
+	}
+	else if (orderByLimitReference.groupClauseIsEmpty ||
+			 orderByLimitReference.groupedByDisjointPartitionColumn)
 	{
 		canPushDownLimit = LIMIT_CAN_PUSHDOWN;
 	}
@@ -4390,6 +4401,12 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 
 	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
 	if (limitCount == NULL && !orderByLimitReference.hasDistinctOn)
+	{
+		return NIL;
+	}
+
+	/* If windown functions are computed on coordinator, we cannot push down sorting. */
+	if (orderByLimitReference.hasNonPushableWindowFunction)
 	{
 		return NIL;
 	}

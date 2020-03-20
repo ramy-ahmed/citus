@@ -545,6 +545,11 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
+-- Grouping can be pushed down with aggregates even when window function can't
+EXPLAIN (COSTS FALSE)
+SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
+FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
+
 -- Window function with inlined CTE
 WITH cte as (
     SELECT uref.id user_id, events_table.value_2, count(*) c
