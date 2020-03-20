@@ -2601,8 +2601,6 @@ ProcessWindowFunctionPullUpForWorkerQuery(MultiExtendedOp *originalOpNode,
 	if (originalOpNode->windowClause != NIL)
 	{
 		List *columnList = pull_var_clause_default((Node *) originalOpNode->windowClause);
-		StringInfoData columnNameString;
-		initStringInfo(&columnNameString);
 
 		Expr *newExpression = NULL;
 		foreach_ptr(newExpression, columnList)
@@ -2611,10 +2609,8 @@ ProcessWindowFunctionPullUpForWorkerQuery(MultiExtendedOp *originalOpNode,
 
 			newTargetEntry->expr = newExpression;
 
-			resetStringInfo(&columnNameString);
-			appendStringInfo(&columnNameString, WORKER_COLUMN_FORMAT,
-							 queryTargetList->targetProjectionNumber);
-			newTargetEntry->resname = columnNameString.data;
+			newTargetEntry->resname =
+				WorkerColumnName(queryTargetList->targetProjectionNumber);
 
 			/* force resjunk to false as we may need this on the master */
 			newTargetEntry->resjunk = false;
@@ -2835,12 +2831,7 @@ GenerateWorkerTargetEntry(TargetEntry *targetEntry, Expr *workerExpression,
 
 	if (newTargetEntry->resname == NULL)
 	{
-		StringInfo columnNameString = makeStringInfo();
-
-		appendStringInfo(columnNameString, WORKER_COLUMN_FORMAT,
-						 targetProjectionNumber);
-
-		newTargetEntry->resname = columnNameString->data;
+		newTargetEntry->resname = WorkerColumnName(targetProjectionNumber);
 	}
 
 	/* we can't generate a target entry without an expression */
@@ -4698,6 +4689,20 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
 	}
 
 	return hasOrderByHllType;
+}
+
+
+/*
+ * WorkerColumnName returns a palloc'd string for being the resname of a TargetEntry.
+ */
+char *
+WorkerColumnName(AttrNumber resno)
+{
+	StringInfoData name = { 0 };
+	initStringInfo(&name);
+	appendStringInfo(&name, WORKER_COLUMN_FORMAT, resno);
+
+	return name.data;
 }
 
 

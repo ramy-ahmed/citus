@@ -1763,11 +1763,9 @@ CreateSubqueryTargetEntryList(List *exprList)
 	{
 		Node *expr = (Node *) lfirst(exprCell);
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);
-		StringInfo exprNameString = makeStringInfo();
 
 		newTargetEntry->expr = (Expr *) copyObject(expr);
-		appendStringInfo(exprNameString, WORKER_COLUMN_FORMAT, resNo);
-		newTargetEntry->resname = exprNameString->data;
+		newTargetEntry->resname = WorkerColumnName(resNo);
 		newTargetEntry->resjunk = false;
 		newTargetEntry->resno = resNo;
 
