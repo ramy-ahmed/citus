@@ -62,11 +62,13 @@ ORDER BY 1;
 
 SELECT day, hll_cardinality(hll_union_agg(unique_users) OVER seven_days)
 FROM daily_uniques
-WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING);
+WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING)
+ORDER BY 1;
 
 SELECT day, (hll_cardinality(hll_union_agg(unique_users) OVER two_days)) - hll_cardinality(unique_users) AS lost_uniques
 FROM daily_uniques
-WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
+WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING)
+ORDER BY 1;
 
 -- Test disabling hash_agg on coordinator query
 SET citus.explain_all_tasks to true;

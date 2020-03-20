@@ -91,7 +91,8 @@ ORDER BY 1;
 
 SELECT day, hll_cardinality(hll_union_agg(unique_users) OVER seven_days)
 FROM daily_uniques
-WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING);
+WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING)
+ORDER BY 1;
     day     | hll_cardinality
 ---------------------------------------------------------------------
  05-24-2018 |              19
@@ -146,7 +147,8 @@ WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING);
 
 SELECT day, (hll_cardinality(hll_union_agg(unique_users) OVER two_days)) - hll_cardinality(unique_users) AS lost_uniques
 FROM daily_uniques
-WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
+WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING)
+ORDER BY 1;
     day     | lost_uniques
 ---------------------------------------------------------------------
  05-24-2018 |            0
