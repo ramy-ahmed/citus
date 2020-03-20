@@ -117,17 +117,16 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
 
-	if (!doRepair)
+	if (doRepair)
+	{
+		RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
+							 targetNodePort);
+	}
+	else
 	{
 		ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 										 targetNodeName, targetNodePort,
 										 shardReplicationMode);
-	}
-	else
-	{
-		/* RepairShardPlacement function repairs only given shard */
-		RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
-							 targetNodePort);
 	}
 
 	PG_RETURN_VOID();
