@@ -541,17 +541,6 @@ IsUpdateOrDelete(Query *query)
 
 
 /*
- * IsModifyDistributedPlan returns true if the multi plan performs modifications,
- * false otherwise.
- */
-bool
-IsModifyDistributedPlan(DistributedPlan *distributedPlan)
-{
-	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
-}
-
-
-/*
  * PlanFastPathDistributedStmt creates a distributed planned statement using
  * the FastPathPlanner.
  */

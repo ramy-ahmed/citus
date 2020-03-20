@@ -4477,6 +4477,18 @@ RowModifyLevelForQuery(Query *query)
 
 	if (commandType == CMD_SELECT)
 	{
+		CommonTableExpr *cte = NULL;
+		foreach_ptr(cte, query->cteList)
+		{
+			Query *cteQuery = (Query *) cte->ctequery;
+
+			if (cteQuery->commandType == CMD_UPDATE ||
+				cteQuery->commandType == CMD_DELETE)
+			{
+				return ROW_MODIFY_NONCOMMUTATIVE;
+			}
+		}
+
 		return ROW_MODIFY_READONLY;
 	}
 

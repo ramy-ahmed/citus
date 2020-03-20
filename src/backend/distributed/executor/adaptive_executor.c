@@ -1415,11 +1415,6 @@ ReadOnlyTask(TaskType taskType)
 static bool
 SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList)
 {
-	if (modLevel != ROW_MODIFY_READONLY)
-	{
-		return false;
-	}
-
 	if (list_length(taskList) != 1)
 	{
 		/* we currently do not support SELECT FOR UPDATE on multi task queries */
@@ -1673,6 +1668,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 
+		/* TODO yes if select with modifying cte */
 		shardCommandExecution->expectResults =
 			(hasReturning && !task->partiallyLocalOrRemote) ||
 			modLevel == ROW_MODIFY_READONLY;
