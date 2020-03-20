@@ -35,7 +35,7 @@ typedef struct ExtendedOpNodeProperties
 
 
 extern ExtendedOpNodeProperties BuildExtendedOpNodeProperties(
-	MultiExtendedOp *extendedOpNode, bool pullUpIntermediateRows);
+	MultiExtendedOp *extendedOpNode, bool hasNonDistributableAggregates);
 
 
 #endif /* EXTENDED_OP_NODE_UTILS_H_ */

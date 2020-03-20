@@ -48,7 +48,7 @@ static bool CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
  */
 ExtendedOpNodeProperties
 BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
-							  bool pullUpIntermediateRows)
+							  bool hasNonDistributableAggregates)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
 
@@ -56,14 +56,8 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
 	bool groupedByDisjointPartitionColumn =
 		GroupedByPartitionColumn((MultiNode *) extendedOpNode, extendedOpNode);
 
-	if (groupedByDisjointPartitionColumn)
-	{
-		/*
-		 * pullUpIntermediate rows tells us aggregates can't be split across
-		 * worker & master. Prefer to push down to worker if possible.
-		 */
-		pullUpIntermediateRows = false;
-	}
+	bool pullUpIntermediateRows = !groupedByDisjointPartitionColumn &&
+								  hasNonDistributableAggregates;
 
 	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
 
