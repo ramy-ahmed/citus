@@ -2377,9 +2377,8 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		workerAggContext.createGroupByClause = false;
 
 		/*
-		 * If there are aggregates without a GROUP BY on the distribution column
-		 * then the results of those aggregates need to be combined on the coordinator.
-		 * In that case we rewrite the expressions using WorkerAggregateWalker.
+		 * If we can push down the expression we copy the expression to the targetlist of the worker query.
+		 * Otherwise the expression is processed to be combined on the coordinator.
 		 */
 		if (CanPushDownExpression((Node *) originalExpression, extendedOpNodeProperties))
 		{
