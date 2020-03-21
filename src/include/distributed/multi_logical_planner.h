@@ -179,7 +179,7 @@ typedef struct MultiExtendedOp
 	List *windowClause;
 	bool hasDistinctOn;
 	bool hasWindowFuncs;
-	bool hasNonPushableWindowFunction;
+	bool onlyPushableWindowFunctions;
 } MultiExtendedOp;
 
 

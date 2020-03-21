@@ -34,11 +34,11 @@ static bool PartitionColumnInTableList(Var *column, List *tableNodeList);
 static bool ShouldPullDistinctColumn(bool repartitionSubquery,
 									 bool groupedByDisjointPartitionColumn,
 									 bool hasNonPartitionColumnDistinctAgg,
-									 bool hasNonPushableWindowFunction);
+									 bool onlyPushableWindowFunctions);
 static bool CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
 										 groupedByDisjointPartitionColumn,
 										 bool hasWindowFuncs, bool
-										 hasNonPushableWindowFunction);
+										 onlyPushableWindowFunctions);
 
 
 /*
@@ -70,13 +70,13 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
 		CanPushDownGroupingAndHaving(pullUpIntermediateRows,
 									 groupedByDisjointPartitionColumn,
 									 extendedOpNode->hasWindowFuncs,
-									 extendedOpNode->hasNonPushableWindowFunction);
+									 extendedOpNode->onlyPushableWindowFunctions);
 
 	bool pullDistinctColumns =
 		ShouldPullDistinctColumn(repartitionSubquery,
 								 groupedByDisjointPartitionColumn,
 								 hasNonPartitionColumnDistinctAgg,
-								 extendedOpNode->hasNonPushableWindowFunction);
+								 extendedOpNode->onlyPushableWindowFunctions);
 
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
@@ -86,8 +86,8 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
 	extendedOpNodeProperties.pullDistinctColumns = pullDistinctColumns;
 	extendedOpNodeProperties.pullUpIntermediateRows = pullUpIntermediateRows;
 	extendedOpNodeProperties.hasWindowFuncs = extendedOpNode->hasWindowFuncs;
-	extendedOpNodeProperties.hasNonPushableWindowFunction =
-		extendedOpNode->hasNonPushableWindowFunction;
+	extendedOpNodeProperties.onlyPushableWindowFunctions =
+		extendedOpNode->onlyPushableWindowFunctions;
 	extendedOpNodeProperties.pushDownGroupingAndHaving = pushDownGroupingAndHaving;
 
 	return extendedOpNodeProperties;
@@ -321,7 +321,7 @@ static bool
 ShouldPullDistinctColumn(bool repartitionSubquery,
 						 bool groupedByDisjointPartitionColumn,
 						 bool hasNonPartitionColumnDistinctAgg,
-						 bool hasNonPushableWindowFunction)
+						 bool onlyPushableWindowFunctions)
 {
 	if (repartitionSubquery)
 	{
@@ -329,7 +329,7 @@ ShouldPullDistinctColumn(bool repartitionSubquery,
 	}
 
 	/* don't pull distinct columns when it can be pushed down */
-	if (!hasNonPushableWindowFunction && groupedByDisjointPartitionColumn)
+	if (onlyPushableWindowFunctions && groupedByDisjointPartitionColumn)
 	{
 		return false;
 	}
@@ -349,7 +349,7 @@ ShouldPullDistinctColumn(bool repartitionSubquery,
 static bool
 CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
 							 groupedByDisjointPartitionColumn,
-							 bool hasWindowFuncs, bool hasNonPushableWindowFunction)
+							 bool hasWindowFuncs, bool onlyPushableWindowFunctions)
 {
 	/* don't push down if we're pulling up */
 	if (pullUpIntermediateRows)
@@ -357,7 +357,7 @@ CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
 		return false;
 	}
 
-	if (hasNonPushableWindowFunction)
+	if (!onlyPushableWindowFunctions)
 	{
 		return false;
 	}

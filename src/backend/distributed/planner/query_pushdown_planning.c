@@ -107,8 +107,6 @@ bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 						  PlannerRestrictionContext *plannerRestrictionContext)
 {
-	StringInfo errorMessage = NULL;
-
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
 	 * given that if postgres already flattened the subqueries, MultiNodeTree()
@@ -190,7 +188,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 
 	/* check if the query has a window function and it is safe to pushdown */
 	if (originalQuery->hasWindowFuncs &&
-		SafeToPushdownWindowFunction(originalQuery, &errorMessage))
+		SafeToPushdownWindowFunction(originalQuery, NULL))
 	{
 		return true;
 	}
@@ -393,7 +391,7 @@ IsOuterJoinExpr(Node *node)
 
 /*
  * SafeToPushdownWindowFunction checks if the query with window function is supported.
- * It returns the result accordingly and modifies the error detail.
+ * Returns the result accordingly and modifies errorDetail if non null.
  */
 bool
 SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
@@ -411,20 +409,26 @@ SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
 
 		if (!windowClause->partitionClause)
 		{
-			*errorDetail = makeStringInfo();
-			appendStringInfoString(*errorDetail,
-								   "Window functions without PARTITION BY on distribution "
-								   "column is currently unsupported");
+			if (errorDetail)
+			{
+				*errorDetail = makeStringInfo();
+				appendStringInfoString(*errorDetail,
+									   "Window functions without PARTITION BY on distribution "
+									   "column is currently unsupported");
+			}
 			return false;
 		}
 	}
 
 	if (!WindowPartitionOnDistributionColumn(query))
 	{
-		*errorDetail = makeStringInfo();
-		appendStringInfoString(*errorDetail,
-							   "Window functions with PARTITION BY list missing distribution "
-							   "column is currently unsupported");
+		if (errorDetail)
+		{
+			*errorDetail = makeStringInfo();
+			appendStringInfoString(*errorDetail,
+								   "Window functions with PARTITION BY list missing distribution "
+								   "column is currently unsupported");
+		}
 		return false;
 	}
 

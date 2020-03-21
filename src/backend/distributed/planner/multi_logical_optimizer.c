@@ -159,7 +159,7 @@ typedef enum LimitPushdownable
 typedef struct OrderByLimitReference
 {
 	bool groupedByDisjointPartitionColumn;
-	bool hasNonPushableWindowFunction;
+	bool onlyPushableWindowFunctions;
 	bool groupClauseIsEmpty;
 	bool sortClauseIsEmpty;
 	bool hasOrderByAggregate;
@@ -253,7 +253,7 @@ static void ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimit
 											  QueryTargetList *queryTargetList);
 static OrderByLimitReference BuildOrderByLimitReference(bool hasDistinctOn, bool
 														groupedByDisjointPartitionColumn,
-														bool hasNonPushableWindowFunction,
+														bool onlyPushableWindowFunctions,
 														List *groupClause,
 														List *sortClauseList,
 														List *targetList);
@@ -1482,12 +1482,12 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
 
-	if (extendedOpNodeProperties->hasNonPushableWindowFunction &&
+	if (!extendedOpNodeProperties->onlyPushableWindowFunctions &&
 		!extendedOpNodeProperties->pushDownGroupingAndHaving)
 	{
 		masterExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
 		masterExtendedOpNode->windowClause = originalOpNode->windowClause;
-		masterExtendedOpNode->hasNonPushableWindowFunction = true;
+		masterExtendedOpNode->onlyPushableWindowFunctions = false;
 	}
 
 	return masterExtendedOpNode;
@@ -2230,8 +2230,14 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	{
 		queryGroupClause.groupClauseList = NIL;
 	}
-	bool pushingDownOriginalGrouping = originalGroupClauseLength == 0 ||
-									   list_length(queryGroupClause.groupClauseList) > 0;
+
+	/*
+	 * For the purpose of this variable, not pushing down when there are no groups
+	 * is pushing down the original grouping, ie the worker's GROUP BY matches
+	 * the master's GROUP BY.
+	 */
+	bool pushingDownOriginalGrouping =
+		list_length(queryGroupClause.groupClauseList) == originalGroupClauseLength;
 
 	/*
 	 * nextSortGroupRefIndex is used by group by, window and order by clauses.
@@ -2250,7 +2256,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 									  &queryHavingQual, &queryTargetList,
 									  &queryGroupClause);
 
-	if (!extendedOpNodeProperties->hasNonPushableWindowFunction)
+	if (extendedOpNodeProperties->onlyPushableWindowFunctions)
 	{
 		ProcessWindowFunctionsForWorkerQuery(originalWindowClause,
 											 originalTargetEntryList,
@@ -2261,7 +2267,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 		ProcessWindowFunctionPullUpForWorkerQuery(originalOpNode, &queryTargetList);
 	}
 
-	if (!extendedOpNodeProperties->hasNonPushableWindowFunction &&
+	if (extendedOpNodeProperties->onlyPushableWindowFunctions &&
 		!extendedOpNodeProperties->pullUpIntermediateRows &&
 		(extendedOpNodeProperties->pushDownGroupingAndHaving ||
 		 (pushingDownOriginalGrouping && originalHavingQual == NULL)
@@ -2294,7 +2300,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 										   extendedOpNodeProperties->
 										   groupedByDisjointPartitionColumn,
 										   extendedOpNodeProperties->
-										   hasNonPushableWindowFunction,
+										   onlyPushableWindowFunctions,
 										   originalGroupClauseList,
 										   originalSortClauseList,
 										   originalTargetEntryList);
@@ -2676,15 +2682,15 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
  */
 static OrderByLimitReference
 BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionColumn,
-						   bool hasNonPushableWindowFunction,
+						   bool onlyPushableWindowFunctions,
 						   List *groupClause, List *sortClauseList, List *targetList)
 {
 	OrderByLimitReference limitOrderByReference;
 
 	limitOrderByReference.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
-	limitOrderByReference.hasNonPushableWindowFunction =
-		hasNonPushableWindowFunction;
+	limitOrderByReference.onlyPushableWindowFunctions =
+		onlyPushableWindowFunctions;
 	limitOrderByReference.hasDistinctOn = hasDistinctOn;
 	limitOrderByReference.groupClauseIsEmpty = (groupClause == NIL);
 	limitOrderByReference.sortClauseIsEmpty = (sortClauseList == NIL);
@@ -3572,7 +3578,7 @@ CanPushDownExpression(Node *expression,
 	bool hasAggregate = contain_aggs_of_level(expression, 0);
 	bool hasWindowFunction = contain_window_function(expression);
 	bool hasPushableWindowFunction =
-		hasWindowFunction && !extendedOpNodeProperties->hasNonPushableWindowFunction;
+		hasWindowFunction && extendedOpNodeProperties->onlyPushableWindowFunctions;
 
 	if (!hasAggregate && !hasWindowFunction)
 	{
@@ -4319,7 +4325,7 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	 * original limit. Else if we have order by clauses with commutative aggregates,
 	 * we can push down approximate limits.
 	 */
-	if (orderByLimitReference.hasNonPushableWindowFunction)
+	if (!orderByLimitReference.onlyPushableWindowFunctions)
 	{
 		canPushDownLimit = LIMIT_CANNOT_PUSHDOWN;
 	}
@@ -4404,7 +4410,7 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 	}
 
 	/* If windown functions are computed on coordinator, we cannot push down sorting. */
-	if (orderByLimitReference.hasNonPushableWindowFunction)
+	if (!orderByLimitReference.onlyPushableWindowFunctions)
 	{
 		return NIL;
 	}

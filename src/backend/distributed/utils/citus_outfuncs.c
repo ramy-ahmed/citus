@@ -324,7 +324,7 @@ OutMultiExtendedOp(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(hasDistinctOn);
 	WRITE_NODE_FIELD(distinctClause);
 	WRITE_BOOL_FIELD(hasWindowFuncs);
-	WRITE_BOOL_FIELD(hasNonPushableWindowFunction);
+	WRITE_BOOL_FIELD(onlyPushableWindowFunctions);
 	WRITE_NODE_FIELD(windowClause);
 
 	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
