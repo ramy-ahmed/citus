@@ -346,6 +346,18 @@ ORDER BY
 LIMIT
 	5;
 
+-- test PARTITION BY avg(...) ORDER BY avg(...)
+SELECT
+	value_1,
+	avg(value_3),
+	dense_rank() OVER (PARTITION BY avg(value_3) ORDER BY avg(value_2))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	1;
+
 -- Group by has more columns than partition by
 SELECT
 	DISTINCT user_id, SUM(value_2) OVER (PARTITION BY user_id)
