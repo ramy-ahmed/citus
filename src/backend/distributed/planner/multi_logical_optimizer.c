@@ -324,6 +324,13 @@ static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
 static bool HasOrderByHllType(List *sortClauseList, List *targetList);
+static bool ShouldPushDownGroupingToWorker(MultiExtendedOp *opNode,
+										   ExtendedOpNodeProperties *
+										   extendedOpNodeProperties);
+static bool ShouldProcessDistinctOrderAndLimitForWorker(
+	ExtendedOpNodeProperties *extendedOpNodeProperties,
+	bool pushingDownOriginalGrouping,
+	Node *havingQual);
 
 
 /*
@@ -2209,20 +2216,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	/* targetProjectionNumber starts from 1 */
 	queryTargetList.targetProjectionNumber = 1;
 
-	/*
-	 * only push down grouping to worker query when pushing down aggregates,
-	 * or when grouping can be done entirely on worker.
-	 * Also duplicate grouping if we have LIMIT without HAVING, as this can
-	 * often result in LIMIT being pushed down.
-	 */
-	bool mightHavePushableLimit = originalHavingQual == NULL &&
-								  originalOpNode->limitCount;
-
-	if (extendedOpNodeProperties->pushDownGroupingAndHaving ||
-		(!extendedOpNodeProperties->pullUpIntermediateRows &&
-		 (mightHavePushableLimit ||
-		  contain_aggs_of_level(originalHavingQual, 0) ||
-		  contain_aggs_of_level((Node *) originalTargetEntryList, 0))))
+	if (ShouldPushDownGroupingToWorker(originalOpNode, extendedOpNodeProperties))
 	{
 		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
 	}
@@ -2267,11 +2261,9 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 		ProcessWindowFunctionPullUpForWorkerQuery(originalOpNode, &queryTargetList);
 	}
 
-	if (extendedOpNodeProperties->onlyPushableWindowFunctions &&
-		!extendedOpNodeProperties->pullUpIntermediateRows &&
-		(extendedOpNodeProperties->pushDownGroupingAndHaving ||
-		 (pushingDownOriginalGrouping && originalHavingQual == NULL)
-		))
+	if (ShouldProcessDistinctOrderAndLimitForWorker(extendedOpNodeProperties,
+													pushingDownOriginalGrouping,
+													originalHavingQual))
 	{
 		bool queryHasAggregates = TargetListHasAggregates(originalTargetEntryList);
 
@@ -4694,6 +4686,80 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
 	}
 
 	return hasOrderByHllType;
+}
+
+
+/*
+ * ShouldPushDownGroupingToWorker returns whether we push down GROUP BY.
+ * This may return true even when GROUP BY is necessary on master.
+ */
+static bool
+ShouldPushDownGroupingToWorker(MultiExtendedOp *opNode,
+							   ExtendedOpNodeProperties *extendedOpNodeProperties)
+{
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
+	{
+		return true;
+	}
+
+	if (extendedOpNodeProperties->pullUpIntermediateRows)
+	{
+		return false;
+	}
+
+	/*
+	 * Duplicate grouping if we have LIMIT without HAVING, as this can
+	 * often result in LIMIT being pushed down.
+	 */
+	if (opNode->havingQual == NULL && opNode->limitCount != NULL)
+	{
+		return true;
+	}
+
+	/*
+	 * If aggregates are being split across worker & master, so must grouping.
+	 */
+	if (contain_aggs_of_level(opNode->havingQual, 0) ||
+		contain_aggs_of_level((Node *) opNode->targetList, 0))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+static bool
+ShouldProcessDistinctOrderAndLimitForWorker(
+	ExtendedOpNodeProperties *extendedOpNodeProperties,
+	bool pushingDownOriginalGrouping,
+	Node *havingQual)
+{
+	if (extendedOpNodeProperties->pullUpIntermediateRows)
+	{
+		return false;
+	}
+
+	/* window functions must be evaluated beforehand */
+	if (!extendedOpNodeProperties->onlyPushableWindowFunctions)
+	{
+		return false;
+	}
+
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
+	{
+		return true;
+	}
+
+	/* If the same GROUP BY is being pushed down and there's no HAVING,
+	 * then the push down logic will be able to handle this scenario.
+	 */
+	if (pushingDownOriginalGrouping && havingQual == NULL)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
