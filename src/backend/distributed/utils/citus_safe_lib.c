@@ -16,9 +16,7 @@
 
 #include "safe_lib.h"
 
-#include <float.h>
 #include <limits.h>
-#include <math.h>
 
 #include "distributed/citus_safe_lib.h"
 #include "lib/stringinfo.h"
@@ -161,47 +159,6 @@ SafeStringToUint64(const char *str)
 	{
 		ereport(ERROR, (errmsg(
 							"Error parsing %s as uint64, aditional characters remain after uint64\n",
-							str)));
-	}
-	return number;
-}
-
-
-/*
- * SafeStringToFloat converts a string containing a number to a float. When it
- * fails it calls ereport.
- *
- * The different error cases are inspired by
- * https://stackoverflow.com/a/26083517/2570866
- */
-float
-SafeStringToFloat(const char *str)
-{
-	char *endptr;
-	errno = 0;
-	float number = strtof(str, &endptr);
-
-	if (str == endptr)
-	{
-		ereport(ERROR, (errmsg("Error parsing %s as float, no digits found\n", str)));
-	}
-	else if (errno == ERANGE && (number == HUGE_VALF || number == -HUGE_VALF))
-	{
-		ereport(ERROR, (errmsg("Error parsing %s as float, overflow occured\n", str)));
-	}
-	else if (errno == ERANGE && number <= FLT_MIN && number >= -FLT_MIN)
-	{
-		ereport(ERROR, (errmsg("Error parsing %s as float, underflow occured\n", str)));
-	}
-	else if (errno != 0)
-	{
-		int err = errno;
-		ereport(ERROR, (errmsg("Error parsing %s as float, errno %d\n", str, err)));
-	}
-	else if (errno == 0 && str && *endptr != '\0')
-	{
-		ereport(ERROR, (errmsg(
-							"Error parsing %s as float, aditional characters remain after float\n",
 							str)));
 	}
 	return number;
