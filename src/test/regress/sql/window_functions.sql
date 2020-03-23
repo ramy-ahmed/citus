@@ -573,6 +573,28 @@ SELECT DISTINCT cte.value_2, cte.c, sum(cte.value_2) OVER (PARTITION BY cte.c)
 FROM cte JOIN events_table et ON et.value_2 = cte.value_2 and et.value_2 = cte.c
 ORDER BY 1;
 
+-- There was a strange bug where this wouldn't have window functions being pushed down
+-- Bug dependent on column ordering
+CREATE TABLE daily_uniques (value_2 float, user_id bigint);
+SELECT create_distributed_table('daily_uniques', 'user_id');
+
+EXPLAIN (COSTS FALSE) SELECT
+  user_id,
+  sum(value_2) AS commits,
+  RANK () OVER (
+    PARTITION BY user_id
+    ORDER BY
+      sum(value_2) DESC
+  )
+FROM daily_uniques
+GROUP BY user_id
+HAVING
+  sum(value_2) > 0
+ORDER BY commits DESC
+LIMIT 10;
+
+DROP TABLE daily_uniques;
+
 -- Partition by reference table column joined to distribution column
 SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
 SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk

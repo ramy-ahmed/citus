@@ -1495,6 +1495,49 @@ ORDER BY 1;
        4 | 4 |  56
 (2 rows)
 
+-- There was a strange bug where this wouldn't have window functions being pushed down
+-- Bug dependent on column ordering
+CREATE TABLE daily_uniques (value_2 float, user_id bigint);
+SELECT create_distributed_table('daily_uniques', 'user_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+EXPLAIN (COSTS FALSE) SELECT
+  user_id,
+  sum(value_2) AS commits,
+  RANK () OVER (
+    PARTITION BY user_id
+    ORDER BY
+      sum(value_2) DESC
+  )
+FROM daily_uniques
+GROUP BY user_id
+HAVING
+  sum(value_2) > 0
+ORDER BY commits DESC
+LIMIT 10;
+                                             QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.commits DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: daily_uniques.user_id, (sum(daily_uniques.value_2)) DESC
+                                 ->  HashAggregate
+                                       Group Key: daily_uniques.user_id
+                                       Filter: (sum(daily_uniques.value_2) > '0'::double precision)
+                                       ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(15 rows)
+
+DROP TABLE daily_uniques;
 -- Partition by reference table column joined to distribution column
 SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
 SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk

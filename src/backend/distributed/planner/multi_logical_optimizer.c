@@ -4115,7 +4115,7 @@ IsPartitionColumn(Expr *columnExpression, Query *query)
 /*
  * FindReferencedTableColumn recursively traverses query tree to find actual relation
  * id, and column that columnExpression refers to. If columnExpression is a
- * non-relational or computed/derived expression, the function returns InvolidOid for
+ * non-relational or computed/derived expression, the function returns InvalidOid for
  * relationId and NULL for column. The caller should provide parent query list from
  * top of the tree to this particular Query's parent. This argument is used to look
  * into CTEs that may be present in the query.
@@ -4154,7 +4154,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 	/*
 	 * We currently don't support finding partition keys in the subqueries
-	 * that reference outer subqueries. For example, in corrolated
+	 * that reference outer subqueries. For example, in correlated
 	 * subqueries in WHERE clause, we don't support use of partition keys
 	 * in the subquery that is referred from the outer query.
 	 */

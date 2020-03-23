@@ -1519,8 +1519,9 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
  * down to workers without invoking join order planner.
  */
 static MultiNode *
-SubqueryPushdownMultiNodeTree(Query *queryTree)
+SubqueryPushdownMultiNodeTree(Query *originalQuery)
 {
+	Query *queryTree = copyObject(originalQuery);
 	List *targetEntryList = queryTree->targetList;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 
@@ -1620,7 +1621,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, originalQuery);
 
 	/*
 	 * Postgres standard planner converts having qual node to a list of and

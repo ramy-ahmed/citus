@@ -777,7 +777,7 @@ MultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, queryTree);
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;
 
@@ -1813,7 +1813,7 @@ MultiProjectNode(List *targetEntryList)
 
 /* Builds the extended operator node using fields from the given query tree. */
 MultiExtendedOp *
-MultiExtendedOpNode(Query *queryTree)
+MultiExtendedOpNode(Query *queryTree, Query *originalQuery)
 {
 	MultiExtendedOp *extendedOpNode = CitusMakeNode(MultiExtendedOp);
 	extendedOpNode->targetList = queryTree->targetList;
@@ -1828,7 +1828,7 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->windowClause = queryTree->windowClause;
 	extendedOpNode->onlyPushableWindowFunctions =
 		!queryTree->hasWindowFuncs ||
-		SafeToPushdownWindowFunction(queryTree, NULL);
+		SafeToPushdownWindowFunction(originalQuery, NULL);
 
 	return extendedOpNode;
 }
