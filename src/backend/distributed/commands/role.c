@@ -234,8 +234,8 @@ ExtractEncryptedPassword(Oid roleOid)
  * copies a role session defaults from the pg_db_role_settings table.
  */
 static List *
-GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple, TupleDesc
-										DbRoleSettingDescription)
+GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple,
+										TupleDesc DbRoleSettingDescription)
 {
 	AlterRoleSetStmt *stmt = makeNode(AlterRoleSetStmt);
 	List *commandList = NIL;
@@ -518,7 +518,7 @@ makeDefElemInt(char *name, int value)
 
 /*
  * GetDatabaseNameFromDbRoleSetting performs a lookup, and finds the database name
- * associated with a Role Setting
+ * associated DbRoleSetting Tuple
  */
 static char *
 GetDatabaseNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription)
@@ -704,8 +704,8 @@ ConfigGenericNameCompare(const void *a, const void *b)
 
 
 /*
- * ShouldPropagateAlterRoleSetQueries decides if an AlterRoleSetStmt should be
- * propagated to worker nodes;
+ * ShouldPropagateAlterRoleSetQueries decides if the set of AlterRoleSetStmt
+ * queries should be propagated to worker nodes
  */
 static bool
 ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
