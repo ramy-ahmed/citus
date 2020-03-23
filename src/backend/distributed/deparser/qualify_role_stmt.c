@@ -18,10 +18,8 @@
 #include "postgres.h"
 
 #include "distributed/deparser.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
+#include "nodes/nodes.h"
+#include "utils/guc.h"
 
 
 static void QualifyVarSetCurrent(VariableSetStmt *setStmt);
@@ -55,10 +53,7 @@ static void
 QualifyVarSetCurrent(VariableSetStmt *setStmt)
 {
 	char *configurationName = setStmt->name;
-	text *nameText = cstring_to_text(configurationName);
-	Datum nameDatum = PointerGetDatum(nameText);
-	Datum configValueDatum = DirectFunctionCall1(show_config_by_name, nameDatum);
-	char *configValue = TextDatumGetCString(configValueDatum);
+	char *configValue = GetConfigOptionByName(configurationName, NULL, false);
 
 	setStmt->kind = VAR_SET_VALUE;
 	setStmt->args = list_make1(MakeSetStatementArgument(configurationName, configValue));
