@@ -241,22 +241,22 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple,
 	List *commandList = NIL;
 	bool isnull = false;
 
-	const char *databaseName =
+	char *databaseName =
 		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
 
 	if (databaseName != NULL)
 	{
-		stmt->database = pstrdup(databaseName);
+		stmt->database = databaseName;
 	}
 
-	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
+	char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
 
 	if (roleName != NULL)
 	{
 		stmt->role = makeNode(RoleSpec);
 		stmt->role->location = -1;
 		stmt->role->roletype = ROLESPEC_CSTRING;
-		stmt->role->rolename = pstrdup(roleName);
+		stmt->role->rolename = roleName;
 	}
 
 	Datum setconfig = heap_getattr(tuple, Anum_pg_db_role_setting_setconfig,
@@ -354,12 +354,12 @@ GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
 	bool isNull = true;
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
 	AlterRoleStmt *stmt = makeNode(AlterRoleStmt);
-	const char *rolename = NameStr(role->rolname);
+	char *roleName = NameStr(role->rolname);
 
 	stmt->role = makeNode(RoleSpec);
 	stmt->role->roletype = ROLESPEC_CSTRING;
 	stmt->role->location = -1;
-	stmt->role->rolename = pstrdup(rolename);
+	stmt->role->rolename = roleName;
 	stmt->action = 1;
 	stmt->options = NIL;
 
