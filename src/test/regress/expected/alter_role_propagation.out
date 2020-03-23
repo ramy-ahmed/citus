@@ -305,6 +305,13 @@ ALTER ROLE CURRENT_USER SET statement_timeout TO '1.5min';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
+SET citus.log_remote_commands TO 1;
+SET log_min_messages TO DEBUG;
+ALTER ROLE CURRENT_USER SET "mixed-characters.=?_\n""" TO 'a\nb';
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';ALTER ROLE postgres SET "mixed-characters.=?_\n""" = E'a\\nb';SET citus.enable_ddl_propagation TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+RESET citus.log_remote_commands;
+RESET log_min_messages;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
@@ -337,6 +344,34 @@ SELECT run_command_on_workers('SHOW "app.dev"""');
 ---------------------------------------------------------------------
  (localhost,57637,t,"a\\nb")
  (localhost,57638,t,"a\\nb")
+(2 rows)
+
+SELECT run_command_on_workers('SHOW "mixed-characters.=?_\n"""');
+                                      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  unrecognized configuration parameter ""mixed-characters.=?_\\n""""")
+ (localhost,57638,f,"ERROR:  unrecognized configuration parameter ""mixed-characters.=?_\\n""""")
+(2 rows)
+
+SELECT *
+FROM run_command_on_workers( $$
+    SELECT
+      config
+    FROM
+    (
+        SELECT unnest(s.setconfig) config, r.rolname, d.datname
+        FROM pg_db_role_setting s
+            LEFT JOIN pg_authid r ON (s.setrole=r.oid)
+            LEFT JOIN pg_database d ON (d.oid=s.setdatabase)
+    ) d
+    WHERE config LIKE 'mixed%'
+    ORDER BY config
+    $$
+);
+ nodename  | nodeport | success |            result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | mixed_characters.=?_\n"=a\nb
+ localhost |    57638 | t       | mixed-characters.=?_\n"=a\nb
 (2 rows)
 
 -- revert back to defaults

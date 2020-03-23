@@ -123,12 +123,35 @@ ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
 
+SET citus.log_remote_commands TO 1;
+SET log_min_messages TO DEBUG;
+ALTER ROLE CURRENT_USER SET "mixed-characters.=?_\n""" TO 'a\nb';
+RESET citus.log_remote_commands;
+RESET log_min_messages;
+
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT run_command_on_workers('SHOW enable_mergejoin');
 SELECT run_command_on_workers('SHOW statement_timeout');
 SELECT run_command_on_workers('SHOW log_min_duration_statement');
 SELECT run_command_on_workers('SHOW "app.dev"""');
 
+SELECT run_command_on_workers('SHOW "mixed-characters.=?_\n"""');
+
+SELECT *
+FROM run_command_on_workers( $$
+    SELECT
+      config
+    FROM
+    (
+        SELECT unnest(s.setconfig) config, r.rolname, d.datname
+        FROM pg_db_role_setting s
+            LEFT JOIN pg_authid r ON (s.setrole=r.oid)
+            LEFT JOIN pg_database d ON (d.oid=s.setdatabase)
+    ) d
+    WHERE config LIKE 'mixed%'
+    ORDER BY config
+    $$
+);
 -- revert back to defaults
 ALTER ROLE SESSION_USER RESET enable_mergejoin;
 SELECT run_command_on_workers('SHOW enable_mergejoin');

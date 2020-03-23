@@ -56,7 +56,6 @@ static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
-static void ParseConfigOption(const char *string, char **name, char **value);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 
 /* controlled via GUC */
@@ -296,7 +295,7 @@ MakeVariableSetStmt(const char *config)
 	char *name = NULL;
 	char *value = NULL;
 
-	ParseConfigOption(config, &name, &value);
+	ParseLongOption(config, &name, &value);
 
 	VariableSetStmt *variableSetStmt = makeNode(VariableSetStmt);
 	variableSetStmt->kind = VAR_SET_VALUE;
@@ -304,41 +303,6 @@ MakeVariableSetStmt(const char *config)
 	variableSetStmt->args = list_make1(MakeSetStatementArgument(name, value));
 
 	return variableSetStmt;
-}
-
-
-/*
- * ParseConfigOption takes a string of the form "some-option=some value" and
- * returns name = "some-option" and value = "some value" in malloc'ed
- * storage.
- *
- * Most of the logic is copied from ParseLongOption in backend/utils/misc/guc.c
- * with one major difference: '-' is not converted to '_' in the option name here.
- *
- * If there is no '=' in the input string then value will be NULL.
- */
-static void
-ParseConfigOption(const char *string, char **name, char **value)
-{
-	AssertArg(string);
-	AssertArg(name);
-	AssertArg(value);
-
-	size_t equalPosition = strcspn(string, "=");
-
-	if (string[equalPosition] == '=')
-	{
-		*name = palloc(equalPosition + 1);
-		strlcpy(*name, string, equalPosition + 1);
-
-		*value = pstrdup(&string[equalPosition + 1]);
-	}
-	else
-	{
-		/* no equal sign in string */
-		*name = pstrdup(string);
-		*value = NULL;
-	}
 }
 
 
