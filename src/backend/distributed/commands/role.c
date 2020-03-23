@@ -727,12 +727,6 @@ ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
 	if (databaseName != NULL &&
 		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
 	{
-		ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE .. IN DATABASE"
-								" .. SET  for distributed databases"),
-						 errdetail("Citus propagates the session defaults that affect "
-								   "current database"),
-						 errhint("You can manually change attributes of roles "
-								 "on workers")));
 		return false;
 	}
 
