@@ -35,10 +35,10 @@ static bool ShouldPullDistinctColumn(bool repartitionSubquery,
 									 bool groupedByDisjointPartitionColumn,
 									 bool hasNonPartitionColumnDistinctAgg,
 									 bool onlyPushableWindowFunctions);
-static bool CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
-										 groupedByDisjointPartitionColumn,
-										 bool hasWindowFuncs, bool
-										 onlyPushableWindowFunctions);
+static bool CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
+										 bool groupedByDisjointPartitionColumn,
+										 bool hasWindowFuncs,
+										 bool onlyPushableWindowFunctions);
 
 
 /*
@@ -347,8 +347,8 @@ ShouldPullDistinctColumn(bool repartitionSubquery,
  * pushed down to worker.
  */
 static bool
-CanPushDownGroupingAndHaving(bool pullUpIntermediateRows, bool
-							 groupedByDisjointPartitionColumn,
+CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
+							 bool groupedByDisjointPartitionColumn,
 							 bool hasWindowFuncs, bool onlyPushableWindowFunctions)
 {
 	/* don't push down if we're pulling up */

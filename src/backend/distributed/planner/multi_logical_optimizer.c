@@ -207,8 +207,8 @@ static void ParentSetNewChild(MultiNode *parentNode, MultiNode *oldChildNode,
 static void ApplyExtendedOpNodes(MultiExtendedOp *originalNode,
 								 MultiExtendedOp *masterNode,
 								 MultiExtendedOp *workerNode);
-static void TransformSubqueryNode(MultiTable *subqueryNode, bool
-								  subqueryContainsNonDistributableAggregates);
+static void TransformSubqueryNode(MultiTable *subqueryNode,
+								  bool subqueryHasNonDistributableAggregates);
 static MultiExtendedOp * MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties);
@@ -289,10 +289,10 @@ static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
 
 /* Local functions forward declarations for aggregate expression checks */
-static bool ContainsNonDistributableAggregates(MultiNode *logicalPlanNode);
+static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
 								  const ExtendedOpNodeProperties *extendedOpNodeProperties);
-static DeferredErrorMessage * DeferErrorIfContainsNonDistributableAggregates(
+static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(
 	MultiNode *logicalPlanNode);
 static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
 	Aggref *arrayAggregateExpression);
@@ -350,7 +350,7 @@ void
 MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 {
 	MultiNode *logicalPlanNode = (MultiNode *) multiLogicalPlan;
-	bool hasNonDistributableAggregates = ContainsNonDistributableAggregates(
+	bool hasNonDistributableAggregates = HasNonDistributableAggregates(
 		logicalPlanNode);
 	List *extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
@@ -361,7 +361,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		!extendedOpNodeProperties.pullUpIntermediateRows)
 	{
 		DeferredErrorMessage *aggregatePushdownError =
-			DeferErrorIfContainsNonDistributableAggregates(logicalPlanNode);
+			DeferErrorIfHasNonDistributableAggregates(logicalPlanNode);
 
 		if (aggregatePushdownError != NULL)
 		{
@@ -446,8 +446,8 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
 			DeferredErrorMessage *error =
-				DeferErrorIfContainsNonDistributableAggregates((MultiNode *) tableNode);
-			bool subqueryContainsNonDistributableAggregates = false;
+				DeferErrorIfHasNonDistributableAggregates((MultiNode *) tableNode);
+			bool subqueryHasNonDistributableAggregates = false;
 
 			if (error != NULL)
 			{
@@ -457,11 +457,11 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 				}
 				else
 				{
-					subqueryContainsNonDistributableAggregates = true;
+					subqueryHasNonDistributableAggregates = true;
 				}
 			}
 
-			TransformSubqueryNode(tableNode, subqueryContainsNonDistributableAggregates);
+			TransformSubqueryNode(tableNode, subqueryHasNonDistributableAggregates);
 		}
 	}
 
@@ -1321,13 +1321,13 @@ ApplyExtendedOpNodes(MultiExtendedOp *originalNode, MultiExtendedOp *masterNode,
  * operator node.
  */
 static void
-TransformSubqueryNode(MultiTable *subqueryNode, bool
-					  subqueryContainsNonDistributableAggregates)
+TransformSubqueryNode(MultiTable *subqueryNode,
+					  bool subqueryHasNonDistributableAggregates)
 {
 	if (CoordinatorAggregationStrategy != COORDINATOR_AGGREGATION_DISABLED &&
-		ContainsNonDistributableAggregates((MultiNode *) subqueryNode))
+		HasNonDistributableAggregates((MultiNode *) subqueryNode))
 	{
-		subqueryContainsNonDistributableAggregates = true;
+		subqueryHasNonDistributableAggregates = true;
 	}
 
 	MultiExtendedOp *extendedOpNode =
@@ -1337,7 +1337,7 @@ TransformSubqueryNode(MultiTable *subqueryNode, bool
 
 	ExtendedOpNodeProperties extendedOpNodeProperties =
 		BuildExtendedOpNodeProperties(extendedOpNode,
-									  subqueryContainsNonDistributableAggregates);
+									  subqueryHasNonDistributableAggregates);
 
 	MultiExtendedOp *masterExtendedOpNode =
 		MasterExtendedOpNode(extendedOpNode, &extendedOpNodeProperties);
@@ -3510,12 +3510,12 @@ MakeIntegerConstInt64(int64 integerValue)
 
 
 /*
- * ContainsNonDistributableAggregates checks for if any aggregates cannot be pushed down.
- * This only checks with GetAggregateType. DeferErrorIfContainsNonDistributableAggregates
+ * HasNonDistributableAggregates checks for if any aggregates cannot be pushed down.
+ * This only checks with GetAggregateType. DeferErrorIfHasNonDistributableAggregates
  * performs further checks which should be done if aggregates are not being pushed down.
  */
 static bool
-ContainsNonDistributableAggregates(MultiNode *logicalPlanNode)
+HasNonDistributableAggregates(MultiNode *logicalPlanNode)
 {
 	if (CoordinatorAggregationStrategy == COORDINATOR_AGGREGATION_DISABLED)
 	{
@@ -3598,12 +3598,12 @@ CanPushDownExpression(Node *expression,
 
 
 /*
- * DeferErrorIfContainsNonDistributableAggregates extracts aggregate expressions from
+ * DeferErrorIfHasNonDistributableAggregates extracts aggregate expressions from
  * the logical plan, walks over them and uses helper functions to check if we
  * can transform these aggregate expressions and push them down to worker nodes.
  */
 static DeferredErrorMessage *
-DeferErrorIfContainsNonDistributableAggregates(MultiNode *logicalPlanNode)
+DeferErrorIfHasNonDistributableAggregates(MultiNode *logicalPlanNode)
 {
 	DeferredErrorMessage *error = NULL;
 	List *opNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
