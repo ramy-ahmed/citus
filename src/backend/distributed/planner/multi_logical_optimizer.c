@@ -1489,8 +1489,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
 
-	if (!extendedOpNodeProperties->onlyPushableWindowFunctions &&
-		!extendedOpNodeProperties->pushDownGroupingAndHaving)
+	if (!extendedOpNodeProperties->onlyPushableWindowFunctions)
 	{
 		masterExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
 		masterExtendedOpNode->windowClause = originalOpNode->windowClause;
@@ -3582,7 +3581,7 @@ CanPushDownExpression(Node *expression,
 		return true;
 	}
 
-	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
+	if (extendedOpNodeProperties->pushDownGroupingAndHaving && !hasWindowFunction)
 	{
 		return true;
 	}
@@ -4729,6 +4728,11 @@ ShouldPushDownGroupingToWorker(MultiExtendedOp *opNode,
 }
 
 
+/*
+ * ShouldProcessDistinctOrderAndLimitForWorker returns whether
+ * ProcessDistinctClauseForWorkerQuery should be called. If not,
+ * neither should ProcessLimitOrderByForWorkerQuery.
+ */
 static bool
 ShouldProcessDistinctOrderAndLimitForWorker(
 	ExtendedOpNodeProperties *extendedOpNodeProperties,

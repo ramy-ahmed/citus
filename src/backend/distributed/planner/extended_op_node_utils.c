@@ -357,11 +357,6 @@ CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
 		return false;
 	}
 
-	if (!onlyPushableWindowFunctions)
-	{
-		return false;
-	}
-
 	/*
 	 * If grouped by a partition column we can push down the having qualifier.
 	 *
@@ -371,5 +366,6 @@ CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
 	 * is safe to push down (i.e. it is partitioned on distribution column, and
 	 * if there is a group by, it contains distribution column).
 	 */
-	return groupedByDisjointPartitionColumn || hasWindowFuncs;
+	return groupedByDisjointPartitionColumn ||
+		   (hasWindowFuncs && onlyPushableWindowFunctions);
 }
