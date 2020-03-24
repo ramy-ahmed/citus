@@ -495,7 +495,7 @@ GenerateAlterRoleSetIfExistsCommandAllRoles()
 		{
 			alterRoleSetQueries =
 				GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
-			commands = list_concat(commands, (void *) alterRoleSetQueries);
+			commands = list_concat(commands, alterRoleSetQueries);
 		}
 	}
 
