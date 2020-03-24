@@ -120,24 +120,23 @@ SELECT master_remove_node('localhost', :worker_1_port);
 ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
 ALTER ROLE CURRENT_USER SET statement_timeout TO '2min';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
-ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
+ALTER ROLE CURRENT_USER SET myvar.foobar TO "007";
 
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT run_command_on_workers('SHOW enable_mergejoin');
 SELECT run_command_on_workers('SHOW statement_timeout');
 SELECT run_command_on_workers('SHOW log_min_duration_statement');
 SELECT run_command_on_workers('SHOW "app.dev"""');
+SELECT run_command_on_workers('SHOW myvar.foobar');
 
 -- revert back to defaults
-ALTER ROLE SESSION_USER RESET enable_mergejoin;
+ALTER ROLE SESSION_USER RESET ALL;
 SELECT run_command_on_workers('SHOW enable_mergejoin');
-ALTER ROLE SESSION_USER RESET statement_timeout;
 SELECT run_command_on_workers('SHOW statement_timeout');
-ALTER ROLE SESSION_USER RESET log_min_duration_statement;
 SELECT run_command_on_workers('SHOW log_min_duration_statement');
-ALTER ROLE SESSION_USER RESET "app.dev""";
 SELECT run_command_on_workers('SHOW "app.dev"""');
+SELECT run_command_on_workers('SHOW myvar.foobar');
 
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
