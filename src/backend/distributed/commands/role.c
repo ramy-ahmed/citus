@@ -584,7 +584,7 @@ MakeSetStatementArgument(char *configurationName, char *configurationValue)
 											   ConfigGenericNameCompare);
 
 	/* If the config is not user-defined, lookup the variable type to contruct the arguments */
-	if (*matchingConfig != NULL)
+	if (matchingConfig != NULL)
 	{
 		switch ((*matchingConfig)->vartype)
 		{
