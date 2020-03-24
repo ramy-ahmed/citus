@@ -301,7 +301,7 @@ SELECT master_remove_node('localhost', :worker_1_port);
 (1 row)
 
 ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
-ALTER ROLE CURRENT_USER SET statement_timeout TO '1.5min';
+ALTER ROLE CURRENT_USER SET statement_timeout TO '2min';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
@@ -319,10 +319,10 @@ SELECT run_command_on_workers('SHOW enable_mergejoin');
 (2 rows)
 
 SELECT run_command_on_workers('SHOW statement_timeout');
- run_command_on_workers
+  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,90s)
- (localhost,57638,t,90s)
+ (localhost,57637,t,2min)
+ (localhost,57638,t,2min)
 (2 rows)
 
 SELECT run_command_on_workers('SHOW log_min_duration_statement');

@@ -118,7 +118,7 @@ RESET ROLE;
 -- the session defaults should be updated on master_add_node
 SELECT master_remove_node('localhost', :worker_1_port);
 ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
-ALTER ROLE CURRENT_USER SET statement_timeout TO '1.5min';
+ALTER ROLE CURRENT_USER SET statement_timeout TO '2min';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
 ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
