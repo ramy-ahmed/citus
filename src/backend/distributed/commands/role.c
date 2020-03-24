@@ -43,12 +43,12 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
-static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
-											   DbRoleSettingDescription);
+static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
+											   TupleDesc DbRoleSettingDescription);
 static DefElem * makeDefElemInt(char *name, int value);
 
-static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc
-										   DbRoleSettingDescription);
+static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
+										   TupleDesc DbRoleSettingDescription);
 static char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 											   TupleDesc DbRoleSettingDescription);
 static Node * makeStringConst(char *str, int location);
