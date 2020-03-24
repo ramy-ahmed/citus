@@ -575,10 +575,20 @@ MakeSetStatementArgument(char *configurationName, char *configurationValue)
 {
 	Node *arg = NULL;
 	char **key = &configurationName;
+
+	/* Perform a lookup on GUC variables to find the config type and units.
+	 * All user-defined GUCs have string values, but we need to perform a search
+	 * on all the GUCs to understand if it is a user-defined one or not.
+	 *
+	 * Note: get_guc_variables() is intended for internal use only, but there
+	 * is no other way to determine allowed units, and value types other than
+	 * using this function
+	 */
 	struct config_generic **gucVariables = get_guc_variables();
 	int numOpts = GetNumConfigOptions();
 	struct config_generic **matchingConfig =
-		(struct config_generic **) SafeBsearch((void *) &key, (void *) gucVariables,
+		(struct config_generic **) SafeBsearch((void *) &key,
+											   (void *) gucVariables,
 											   numOpts,
 											   sizeof(struct config_generic *),
 											   ConfigGenericNameCompare);
@@ -706,10 +716,14 @@ ConfigGenericNameCompare(const void *a, const void *b)
 /*
  * ShouldPropagateAlterRoleSetQueries decides if the set of AlterRoleSetStmt
  * queries should be propagated to worker nodes
+ *
+ * A single DbRoleSetting tuple can be used to create multiple AlterRoleSetStmt
+ * queries as all of the configs are stored in a text[] column and each entry
+ * creates a seperate statement
  */
 static bool
-ShouldPropagateAlterRoleSetQueries(HeapTuple tuple, TupleDesc
-								   DbRoleSettingDescription)
+ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
+								   TupleDesc DbRoleSettingDescription)
 {
 	if (!ShouldPropagate())
 	{
